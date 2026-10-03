@@ -246,8 +246,18 @@
     <!-- 드로잉 모드 팔레트 툴바 -->
     <aside id="drawingToolbar" class="drawing-toolbar" hidden>
       <div class="dt-head">
-        <span class="dt-title">🎨 <b>손가락 드로잉 스튜디오</b></span>
-        <span class="dt-badge">검지로 자유롭게 그리기</span>
+        <div class="dt-title">
+          <span>🎨 <b>손가락 드로잉 스튜디오</b></span>
+          <span class="dt-badge">검지로 자유롭게 그리기</span>
+        </div>
+        <div class="dt-head-controls">
+          <button id="dtOpacityBtn" type="button" class="dt-head-btn" title="카메라 투명 뷰 스위치">👁️ 투명 뷰</button>
+          <button id="dtDockBtn" type="button" class="dt-head-btn" title="상단 Dock / 우측 팝업 위치 변경">📌 상단 Dock</button>
+        </div>
+      </div>
+
+      <div class="dt-focus-hint" id="dtFocusHint">
+        🎯 <span>검지(☝️)로 항목 위에 <b>0.3초간 멈추면</b> 자동 선택됩니다</span>
       </div>
 
       <div class="dt-body">
@@ -321,6 +331,17 @@
       <button id="fsBtn" class="act" type="button">⛶ <span>전체화면</span></button>
     </nav>
     <footer class="app-footer" hidden>© 2026 창순기획</footer>
+
+    <!-- 손가락 모션 포인터 (HUD 최상단 렌더링) -->
+    <div id="motionPointer" class="motion-pointer" hidden aria-hidden="true">
+      <svg class="pointer-svg" viewBox="0 0 60 60">
+        <circle class="pointer-bg-ring" cx="30" cy="30" r="24" />
+        <circle class="pointer-progress-ring" id="pointerProgressRing" cx="30" cy="30" r="24" />
+      </svg>
+      <div class="pointer-crosshair"></div>
+      <div class="pointer-dot"></div>
+      <span class="pointer-badge" id="pointerBadge">☝️ 검지 조준</span>
+    </div>
   </main>
 
   <!-- 부팅 점검: main.js가 불러와지지 않을 때 원인을 화면에 알려 준다 (일반 스크립트) -->

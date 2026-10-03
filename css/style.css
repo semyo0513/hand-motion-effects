@@ -462,13 +462,14 @@ input[type="range"]::-moz-range-thumb {
 /* ---------- 드로잉 스튜디오 툴바 ---------- */
 .drawing-toolbar {
   position: absolute; top: 70px; right: 20px; z-index: 25;
-  width: 320px; max-width: calc(100vw - 32px);
+  width: 330px; max-width: calc(100vw - 32px);
   padding: 1rem; border-radius: 20px;
   background: var(--glass-strong);
   border: 1px solid rgba(var(--cyan), 0.5);
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(var(--cyan), 0.15);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   display: flex; flex-direction: column; gap: 0.8rem;
+  transition: background 0.3s, border-color 0.3s, transform 0.3s, width 0.3s;
   animation: dtSlide 0.35s ease-out;
 }
 @keyframes dtSlide {
@@ -476,9 +477,50 @@ input[type="range"]::-moz-range-thumb {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.dt-head { display: flex; align-items: center; justify-content: space-between; }
-.dt-title { font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem; }
+/* 👁️ 투명 뷰 모드 (카메라 화면 완벽 투과) */
+.drawing-toolbar.transparent-mode {
+  background: rgba(10, 8, 20, 0.28) !important;
+  border-color: rgba(var(--cyan), 0.85) !important;
+  box-shadow: 0 0 35px rgba(var(--cyan), 0.4), inset 0 0 25px rgba(var(--cyan), 0.2) !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+}
+
+/* 📌 상단 Dock 모드 (화면 중앙 상단에 슬림 배치) */
+.drawing-toolbar.top-dock-mode {
+  top: 15px !important; right: auto !important; left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: min(96vw, 58rem) !important; max-width: 96vw !important;
+  flex-direction: row !important; align-items: center !important; justify-content: space-between !important;
+  padding: 0.6rem 1rem !important; gap: 1rem !important;
+}
+.drawing-toolbar.top-dock-mode .dt-body {
+  flex-direction: row !important; align-items: center !important; gap: 1.2rem !important;
+}
+.drawing-toolbar.top-dock-mode .dt-focus-hint { display: none !important; }
+.drawing-toolbar.top-dock-mode .range-section { display: none !important; }
+
+.dt-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.dt-title { font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .dt-badge { font-size: 0.72rem; padding: 0.18rem 0.5rem; border-radius: 99px; background: rgba(var(--cyan), 0.2); color: rgb(var(--cyan)); border: 1px solid rgba(var(--cyan), 0.4); }
+
+.dt-head-controls { display: flex; align-items: center; gap: 0.35rem; }
+.dt-head-btn {
+  padding: 0.25rem 0.55rem; border-radius: 8px; font-size: 0.75rem; font-weight: 700;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--line); color: var(--paper);
+  transition: all 0.2s; white-space: nowrap;
+}
+.dt-head-btn:hover, .dt-head-btn.active {
+  background: rgba(var(--cyan), 0.3); border-color: rgb(var(--cyan)); color: #fff;
+  box-shadow: 0 0 10px rgba(var(--cyan), 0.4);
+}
+
+.dt-focus-hint {
+  padding: 0.4rem 0.7rem; border-radius: 10px;
+  background: rgba(var(--cyan), 0.12); border: 1px solid rgba(var(--cyan), 0.3);
+  font-size: 0.78rem; color: rgb(var(--cyan)); display: flex; align-items: center; gap: 0.4rem;
+}
+.dt-focus-hint b { color: #ffffff; text-decoration: underline; }
 
 .dt-body { display: flex; flex-direction: column; gap: 0.7rem; }
 .dt-section { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -486,14 +528,14 @@ input[type="range"]::-moz-range-thumb {
 
 .draw-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
 .swatch {
-  width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
   padding: 0; cursor: pointer; transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
 }
-.swatch:hover { transform: scale(1.18); }
-.swatch.active { border-color: #ffffff; transform: scale(1.22); box-shadow: 0 0 12px currentColor; }
+.swatch:hover, .swatch.motion-hover { transform: scale(1.4) !important; border-color: #ffffff !important; box-shadow: 0 0 20px rgba(var(--cyan), 0.9), 0 0 10px #ffffff !important; z-index: 10; }
+.swatch.active { border-color: #ffffff; transform: scale(1.25); box-shadow: 0 0 14px currentColor; }
 
 .color-picker-btn {
-  position: relative; width: 26px; height: 26px; border-radius: 50%;
+  position: relative; width: 28px; height: 28px; border-radius: 50%;
   background: radial-gradient(circle, #ff0000, #00ff00, #0000ff);
   display: grid; place-items: center; font-size: 0.75rem; cursor: pointer;
   border: 2px solid rgba(255,255,255,0.4); overflow: hidden;
@@ -503,11 +545,17 @@ input[type="range"]::-moz-range-thumb {
 .draw-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
 .tool-chip {
   display: flex; align-items: center; justify-content: center; gap: 0.35rem;
-  padding: 0.4rem 0.6rem; border-radius: 10px; font-size: 0.8rem; font-weight: 600;
+  padding: 0.45rem 0.65rem; border-radius: 10px; font-size: 0.82rem; font-weight: 600;
   background: rgba(255,255,255,0.06); border: 1px solid var(--line); color: var(--paper);
   transition: all 0.2s;
 }
-.tool-chip:hover { background: rgba(255,255,255,0.12); }
+.tool-chip:hover, .tool-chip.motion-hover, .dt-btn.motion-hover {
+  background: rgba(var(--cyan), 0.4) !important;
+  border-color: #ffffff !important;
+  color: #fff !important;
+  transform: scale(1.1) !important;
+  box-shadow: 0 0 20px rgba(var(--cyan), 0.6), inset 0 0 10px rgba(255,255,255,0.3) !important;
+}
 .tool-chip.active { background: rgba(var(--cyan), 0.25); border-color: rgb(var(--cyan)); color: #fff; box-shadow: 0 0 12px rgba(var(--cyan), 0.35); }
 
 .draw-size-range { width: 100%; accent-color: rgb(var(--cyan)); }
@@ -516,6 +564,7 @@ input[type="range"]::-moz-range-thumb {
 .dt-btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem;
   padding: 0.45rem 0.5rem; border-radius: 10px; font-size: 0.8rem; font-weight: 700; border: none;
+  transition: all 0.2s;
 }
 .dt-btn.danger { background: rgba(255, 60, 60, 0.2); color: #ff8080; border: 1px solid rgba(255, 60, 60, 0.4); }
 .dt-btn.danger:hover { background: rgba(255, 60, 60, 0.4); }
@@ -523,6 +572,62 @@ input[type="range"]::-moz-range-thumb {
 .dt-btn.primary:hover { filter: brightness(1.15); }
 .dt-btn.ghost { background: rgba(255,255,255,0.08); color: var(--paper); border: 1px solid var(--line); }
 .dt-btn.ghost:hover { background: rgba(255,255,255,0.16); }
+
+/* ---------- HUD 손가락 모션 포인터 Overlay ---------- */
+.motion-pointer {
+  position: fixed; z-index: 10000; pointer-events: none;
+  width: 60px; height: 60px; margin-left: -30px; margin-top: -30px;
+  display: grid; place-items: center;
+  transition: transform 0.08s ease-out, opacity 0.2s ease-out;
+  will-change: left, top, transform;
+}
+
+.pointer-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transform: rotate(-90deg); filter: drop-shadow(0 0 12px rgba(var(--cyan), 0.8));
+}
+.pointer-bg-ring {
+  fill: none; stroke: rgba(var(--cyan), 0.3); stroke-width: 3;
+}
+.pointer-progress-ring {
+  fill: none; stroke: #ffffff; stroke-width: 5;
+  stroke-dasharray: 150.79; stroke-dashoffset: 150.79;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.05s linear;
+}
+
+.pointer-crosshair {
+  position: absolute; width: 34px; height: 34px; border-radius: 50%;
+  border: 2px dashed rgb(var(--cyan));
+  animation: pointerSpin 6s linear infinite;
+}
+@keyframes pointerSpin { to { transform: rotate(360deg); } }
+
+.pointer-dot {
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 0 16px rgb(var(--cyan)), 0 0 6px #ffffff;
+}
+
+.pointer-badge {
+  position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
+  padding: 0.22rem 0.6rem; border-radius: 99px;
+  background: rgba(14, 12, 26, 0.95); border: 1px solid rgb(var(--cyan));
+  color: rgb(var(--cyan)); font-size: 0.75rem; font-weight: 800;
+  white-space: nowrap; box-shadow: 0 0 14px rgba(0,0,0,0.8), 0 0 8px rgba(var(--cyan), 0.5);
+  transition: all 0.2s;
+}
+
+.motion-pointer.target-locked {
+  transform: scale(1.25);
+}
+.motion-pointer.target-locked .pointer-crosshair {
+  border-color: #ffffff; border-style: solid;
+  box-shadow: 0 0 20px rgb(var(--cyan));
+}
+.motion-pointer.target-locked .pointer-badge {
+  background: rgb(var(--cyan)); color: #000; border-color: #ffffff;
+  font-size: 0.82rem; font-weight: 900;
+}
 
 /* ---------- 모바일 ---------- */
 @media (max-width: 700px) {

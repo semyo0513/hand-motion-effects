@@ -74,7 +74,7 @@ const els = {
   xShieldCheck: $('xShieldCheck'),
   skyStrikeCheck: $('skyStrikeCheck'),
 
-  // 드로잉 툴바
+  // 드로잉 툴바 및 HUD 포인터
   drawingToolbar: $('drawingToolbar'),
   drawPalette: $('drawPalette'),
   drawColorPicker: $('drawColorPicker'),
@@ -83,6 +83,11 @@ const els = {
   downloadDrawBtn: $('downloadDrawBtn'),
   exitDrawBtn: $('exitDrawBtn'),
   drawBtn: $('drawBtn'),
+  motionPointer: $('motionPointer'),
+  pointerProgressRing: $('pointerProgressRing'),
+  pointerBadge: $('pointerBadge'),
+  dtOpacityBtn: $('dtOpacityBtn'),
+  dtDockBtn: $('dtDockBtn'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -281,13 +286,57 @@ function setDrawingMode(on) {
     els.drawingToolbar.style.display = next ? 'flex' : 'none';
   }
   if (next) {
-    showToast('🎨', '드로잉 스튜디오', '검지 손가락(☝️)으로 글자를 쓰고, 주먹(✊)을 쥐면 펜이 들려요!', true);
+    showToast('🎨', '드로잉 스튜디오', '검지(☝️) 글자쓰기 | 주먹(✊) 펜떼기 | 3손가락(🤟) 색상변경 | 2손가락(✌️) 도구변경', true);
   } else {
     showToast('🚪', '드로잉 종료', '작성한 그림은 보존됩니다', true);
   }
 }
 
-/* ===================== 모션 인식 팔레트 선택 ===================== */
+/* ===================== 모션 인식 팔레트 선택 & 제스처 단축 ===================== */
+
+const PALETTE_COLORS = [
+  { hex: '#00f0ff', name: '네온 시안' },
+  { hex: '#ff5500', name: '플레임 오렌지' },
+  { hex: '#b026ff', name: '바이올렛' },
+  { hex: '#00ff66', name: '네온 그린' },
+  { hex: '#ffd700', name: '골드' },
+  { hex: '#ff007f', name: '핫 핑크' },
+  { hex: '#ffffff', name: '화이트' },
+  { hex: '#222222', name: '다크' },
+];
+let currentColorIdx = 0;
+
+function cycleDrawColor() {
+  currentColorIdx = (currentColorIdx + 1) % PALETTE_COLORS.length;
+  const item = PALETTE_COLORS[currentColorIdx];
+  drawingEngine.setColor(item.hex);
+  if (els.drawPalette) {
+    const swatches = els.drawPalette.querySelectorAll('.swatch');
+    swatches.forEach((sw) => {
+      sw.classList.toggle('active', sw.dataset.color === item.hex);
+    });
+  }
+  showToast('🎨', '색상 변경 (손가락 3개)', item.name, true);
+}
+
+const DRAW_TOOLS = [
+  { id: 'glow', emoji: '🖌️', name: '네온 글루 펜' },
+  { id: 'marker', emoji: '✏️', name: '마커 펜' },
+  { id: 'spark', emoji: '⚡', name: '스파크 펜' },
+  { id: 'eraser', emoji: '🧹', name: '지우개' },
+];
+let currentToolIdx = 0;
+
+function cycleDrawTool() {
+  currentToolIdx = (currentToolIdx + 1) % DRAW_TOOLS.length;
+  const tool = DRAW_TOOLS[currentToolIdx];
+  drawingEngine.setTool(tool.id);
+  const toolChips = document.querySelectorAll('.tool-chip');
+  toolChips.forEach((chip) => {
+    chip.classList.toggle('active', chip.dataset.tool === tool.id);
+  });
+  showToast(tool.emoji, '도구 변경 (V-사인)', tool.name, true);
+}
 
 let paletteHoverStart = 0;
 let paletteHoverTarget = null;
@@ -295,7 +344,9 @@ let hoverProgress = 0;
 let lastHoverPoint = null;
 
 function updateMotionPalette(frame, now) {
-  if (!els.drawingToolbar || els.drawingToolbar.hidden) {
+  if (!state.drawingMode) {
+    if (els.motionPointer) els.motionPointer.hidden = true;
+    if (paletteHoverTarget) paletteHoverTarget.classList.remove('motion-hover');
     paletteHoverTarget = null;
     paletteHoverStart = 0;
     hoverProgress = 0;
@@ -303,82 +354,150 @@ function updateMotionPalette(frame, now) {
     return;
   }
 
-  const clickableItems = [
-    ...els.drawingToolbar.querySelectorAll('.swatch'),
-    ...els.drawingToolbar.querySelectorAll('.tool-chip'),
-    ...els.drawingToolbar.querySelectorAll('.dt-btn'),
-  ];
-
-  let currentTarget = null;
-  let currentPt = null;
-
   const rect = els.canvas.getBoundingClientRect();
   const scaleX = rect.width / state.W;
   const scaleY = rect.height / state.H;
 
-  for (const h of frame.hands) {
-    const tip = h.tips.index || h.center;
-    const screenX = rect.left + tip.x * scaleX;
-    const screenY = rect.top + tip.y * scaleY;
+  // 손가락 위치 감지 (검지 끝 우선)
+  let activeHand = null;
+  let tipPt = null;
 
-    for (const item of clickableItems) {
-      const b = item.getBoundingClientRect();
-      if (screenX >= b.left - 8 && screenX <= b.right + 8 && screenY >= b.top - 8 && screenY <= b.bottom + 8) {
-        currentTarget = item;
-        currentPt = { x: tip.x, y: tip.y, screenX, screenY };
-        break;
-      }
+  for (const h of frame.hands) {
+    if (h.tips.index) {
+      activeHand = h;
+      tipPt = h.tips.index;
+      break;
     }
-    if (currentTarget) break;
   }
 
-  if (currentTarget) {
-    lastHoverPoint = currentPt;
-    if (paletteHoverTarget === currentTarget) {
-      const elapsed = now - paletteHoverStart;
-      hoverProgress = Math.min(1, elapsed / 300); // 0.3초 동안 팔레트 상에 검지를 올리면 자동 선택
-      if (hoverProgress >= 1) {
-        currentTarget.click();
-        paletteHoverStart = now + 400; // 자동 클릭 후 쿨다운
-        hoverProgress = 0;
-      }
-    } else {
-      paletteHoverTarget = currentTarget;
-      paletteHoverStart = now;
-      hoverProgress = 0;
-    }
-  } else {
+  if (!tipPt && frame.hands.length > 0) {
+    activeHand = frame.hands[0];
+    tipPt = activeHand.tips.index || activeHand.center;
+  }
+
+  if (!tipPt) {
+    if (els.motionPointer) els.motionPointer.hidden = true;
+    if (paletteHoverTarget) paletteHoverTarget.classList.remove('motion-hover');
     paletteHoverTarget = null;
     paletteHoverStart = 0;
     hoverProgress = 0;
     lastHoverPoint = null;
+    return;
+  }
+
+  const screenX = rect.left + tipPt.x * scaleX;
+  const screenY = rect.top + tipPt.y * scaleY;
+
+  // 화면 최상단 HUD 포인터 레이어 이동
+  if (els.motionPointer) {
+    els.motionPointer.hidden = false;
+    els.motionPointer.style.left = `${screenX}px`;
+    els.motionPointer.style.top = `${screenY}px`;
+  }
+
+  // 팔레트 항목과 자석(Magnet) 조준 충돌 테스트
+  let currentTarget = null;
+  let currentPt = null;
+
+  if (els.drawingToolbar && !els.drawingToolbar.hidden) {
+    const clickableItems = [
+      ...els.drawingToolbar.querySelectorAll('.swatch'),
+      ...els.drawingToolbar.querySelectorAll('.tool-chip'),
+      ...els.drawingToolbar.querySelectorAll('.dt-btn'),
+      ...els.drawingToolbar.querySelectorAll('.dt-head-btn'),
+    ];
+
+    for (const item of clickableItems) {
+      const b = item.getBoundingClientRect();
+      // 넓은 자석 영역 패딩 (+18px) 적용으로 손쉬운 맞춤
+      if (screenX >= b.left - 18 && screenX <= b.right + 18 && screenY >= b.top - 18 && screenY <= b.bottom + 18) {
+        currentTarget = item;
+        currentPt = { x: tipPt.x, y: tipPt.y, screenX, screenY };
+        break;
+      }
+    }
+  }
+
+  if (currentTarget !== paletteHoverTarget) {
+    if (paletteHoverTarget) paletteHoverTarget.classList.remove('motion-hover');
+    paletteHoverTarget = currentTarget;
+    paletteHoverStart = currentTarget ? now : 0;
+    hoverProgress = 0;
+  }
+
+  if (currentTarget) {
+    currentTarget.classList.add('motion-hover');
+    lastHoverPoint = currentPt;
+    const elapsed = now - paletteHoverStart;
+    hoverProgress = Math.min(1, elapsed / 300); // 0.3초 멈춤 시 자동 선택
+
+    if (els.motionPointer) {
+      els.motionPointer.classList.add('target-locked');
+    }
+
+    // 조준 중인 항목 뱃지 표시
+    let label = '🎯 조준';
+    if (currentTarget.classList.contains('swatch')) {
+      label = `🎨 ${currentTarget.title || '색상'}`;
+    } else if (currentTarget.classList.contains('tool-chip')) {
+      label = currentTarget.textContent.trim();
+    } else if (currentTarget.classList.contains('dt-btn')) {
+      label = currentTarget.textContent.trim();
+    } else if (currentTarget.classList.contains('dt-head-btn')) {
+      label = currentTarget.textContent.trim();
+    }
+
+    if (els.pointerBadge) els.pointerBadge.textContent = label;
+
+    if (hoverProgress >= 1) {
+      currentTarget.click();
+      paletteHoverStart = now + 450; // 클릭 후 쿨다운
+      hoverProgress = 0;
+    }
+  } else {
+    lastHoverPoint = null;
+    if (els.motionPointer) {
+      els.motionPointer.classList.remove('target-locked');
+    }
+    if (els.pointerBadge) {
+      const isDrawing = activeHand && (activeHand.gesture === 'point' || activeHand.fingerCount === 1);
+      els.pointerBadge.textContent = isDrawing ? '✏️ 그리는 중' : '☝️ 검지 조준';
+    }
+  }
+
+  // 360도 SVG 원형 프로그레스 링 업데이트
+  if (els.pointerProgressRing) {
+    const totalCircumference = 150.79;
+    const offset = totalCircumference * (1 - hoverProgress);
+    els.pointerProgressRing.style.strokeDashoffset = `${offset}`;
   }
 }
 
 function drawMotionPaletteCursor(ctx, now) {
-  if (!state.drawingMode || !paletteHoverTarget || !lastHoverPoint) return;
-  const { x, y } = lastHoverPoint;
-  ctx.save();
-  ctx.globalAlpha = 0.95;
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = `rgb(${CONFIG.suit.reactorColor || '120,230,255'})`;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  if (!state.drawingMode) return;
+  if (lastHoverPoint && paletteHoverTarget) {
+    const { x, y } = lastHoverPoint;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = `rgb(${CONFIG.suit.reactorColor || '120,230,255'})`;
+    ctx.fillStyle = '#ffffff';
 
-  ctx.beginPath();
-  ctx.arc(x, y, 12, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(x, y, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  if (hoverProgress > 0) {
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#ffffff';
+    const r = 22;
     ctx.beginPath();
-    ctx.arc(x, y, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hoverProgress);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 1.6, y); ctx.lineTo(x - r * 0.7, y);
+    ctx.moveTo(x + r * 0.7, y); ctx.lineTo(x + r * 1.6, y);
+    ctx.moveTo(x, y - r * 1.6); ctx.lineTo(x, y - r * 0.7);
+    ctx.moveTo(x, y + r * 0.7); ctx.lineTo(x, y + r * 1.6);
+    ctx.stroke();
+
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 /* ===================== 토스트(동작 인식 안내) ===================== */
@@ -518,6 +637,23 @@ function bindControls() {
   if (els.exitDrawBtn) els.exitDrawBtn.addEventListener('click', () => setDrawingMode(false));
   if (els.clearDrawBtn) els.clearDrawBtn.addEventListener('click', () => drawingEngine.clear());
   if (els.downloadDrawBtn) els.downloadDrawBtn.addEventListener('click', () => drawingEngine.download(els.video, state.mirror));
+
+  if (els.dtOpacityBtn) {
+    els.dtOpacityBtn.addEventListener('click', () => {
+      const isTrans = els.drawingToolbar.classList.toggle('transparent-mode');
+      els.dtOpacityBtn.classList.toggle('active', isTrans);
+      showToast('👁️', isTrans ? '투명 뷰 활성화' : '투명 뷰 해제', isTrans ? '카메라 화면이 완벽하게 투과됩니다' : '기본 유선형 스타일', true);
+    });
+  }
+
+  if (els.dtDockBtn) {
+    els.dtDockBtn.addEventListener('click', () => {
+      const isDock = els.drawingToolbar.classList.toggle('top-dock-mode');
+      els.dtDockBtn.classList.toggle('active', isDock);
+      els.dtDockBtn.textContent = isDock ? '📌 우측 팝업' : '📌 상단 Dock';
+      showToast('📌', isDock ? '상단 Dock 모드' : '우측 팝업 모드', isDock ? '팔레트가 상단 바에 고정됩니다' : '팔레트가 우측 모달로 배치됩니다', true);
+    });
+  }
 
   if (els.drawSizeSlider) {
     els.drawSizeSlider.addEventListener('input', (e) => drawingEngine.setSize(e.target.value));
@@ -776,6 +912,27 @@ function tick(now) {
 
   if (state.drawingMode) {
     updateMotionPalette(frame, now);
+
+    let lastCycleAt = state.lastCycleAt || 0;
+    const hasEv = (t) => frame.events.some((e) => e.type === t);
+
+    // 🤟 손가락 3개 -> 색상 순환 변경
+    if (hasEv('enter') && frame.events.some((e) => e.gesture === 'finger_3') && now - lastCycleAt > 1200) {
+      state.lastCycleAt = now;
+      cycleDrawColor();
+    }
+    // ✌️ V-사인 -> 펜 도구 순환 변경
+    else if (hasEv('enter') && frame.events.some((e) => e.gesture === 'peace') && now - lastCycleAt > 1200) {
+      state.lastCycleAt = now;
+      cycleDrawTool();
+    }
+    // 🖐️ 손가락 4개 -> 전체 지우기
+    else if (hasEv('enter') && frame.events.some((e) => e.gesture === 'finger_4') && now - lastCycleAt > 1500) {
+      state.lastCycleAt = now;
+      drawingEngine.clear();
+      showToast('🗑️', '전체 지우기', '드로잉 캔버스가 초기화되었습니다', true);
+    }
+
     for (const h of frame.hands) {
       // 오직 검지 손가락만 펼쳤을 때만(point / fingerCount 1) 펜으로 그려짐
       const isPen = h.gesture === 'point' || (h.fingerCount === 1 && h.tips.index);
