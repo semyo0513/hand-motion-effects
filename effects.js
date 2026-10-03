@@ -266,22 +266,37 @@ export class EffectManager {
         break;
       }
       case 'charge': {
-        const n = Math.round(50 * this.intensity);
+        const n = Math.round(140 * this.intensity);
         for (let i = 0; i < n; i++) {
           const a = rand(0, TAU);
-          const r = ev.size * rand(2.2, 3.2);
+          const r = ev.size * rand(2.5, 4.2);
+          const sp = rand(160, 450);
           this.p.emit({
             x: ev.x + Math.cos(a) * r,
             y: ev.y + Math.sin(a) * r,
+            vx: -Math.cos(a) * sp - Math.sin(a) * sp * 0.5,
+            vy: -Math.sin(a) * sp + Math.cos(a) * sp * 0.5,
             tx: ev.x,
             ty: ev.y,
-            pull: 14,
-            life: rand(0.3, 0.5),
-            size: rand(6, 14) * sc,
-            rgb: pick(t.palette),
+            pull: 26,
+            life: rand(0.35, 0.75),
+            size: rand(6, 18) * sc,
+            rgb: pick([...t.palette, '255,255,255', '255,230,120']),
             drag: 0.92,
           });
         }
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * TAU + rand(-0.3, 0.3);
+          const len = ev.size * rand(2.0, 3.8);
+          this.bolts.push({
+            pts: makeBolt(ev.x, ev.y, ev.x + Math.cos(a) * len, ev.y + Math.sin(a) * len, 45),
+            life: 0.18,
+            maxLife: 0.18,
+            w: 3.5,
+          });
+        }
+        this._addRing(ev.x, ev.y, ev.size * 2.5, -650, 0.5, 7);
+        this.shake = Math.max(this.shake, 0.45);
         break;
       }
       case 'release':
@@ -350,25 +365,49 @@ export class EffectManager {
         break;
       }
       case 'fist': {
-        const n = this._rate('fist' + h.slot, 50, dt);
+        const n = this._rate('fist' + h.slot, 140, dt);
         for (let i = 0; i < n; i++) {
           const a = rand(0, TAU);
-          const r = h.size * rand(1.6, 2.2);
+          const r = h.size * rand(1.8, 3.2);
+          const sp = r * 1.6;
           this.p.emit({
             x: c.x + Math.cos(a) * r,
             y: c.y + Math.sin(a) * r,
+            vx: -Math.sin(a) * sp - Math.cos(a) * 90,
+            vy: Math.cos(a) * sp - Math.sin(a) * 90,
             tx: c.x,
             ty: c.y,
-            pull: 6,
-            life: 0.5,
-            size: rand(4, 9) * sc,
-            rgb: pick(t.palette),
-            drag: 0.95,
+            pull: 20,
+            life: rand(0.35, 0.65),
+            size: rand(5, 13) * sc,
+            rgb: pick([...t.palette, '255,255,255', '255,220,100']),
+            jitter: 50,
+            drag: 0.94,
           });
         }
-        const pulse = 0.7 + 0.15 * Math.sin(now / 90);
-        this.cores.push({ x: c.x, y: c.y, r: h.size * pulse, rgb: t.core, alpha: 0.8 });
-        this.cores.push({ x: c.x, y: c.y, r: h.size * pulse * 0.4, rgb: '255,255,255', alpha: 0.7 });
+
+        // 주먹 주변 전기 스파크 번개 발광
+        if (Math.random() < 0.45) {
+          const a = rand(0, TAU);
+          const len = h.size * rand(1.5, 2.8);
+          this.bolts.push({
+            pts: makeBolt(c.x, c.y, c.x + Math.cos(a) * len, c.y + Math.sin(a) * len, 35),
+            life: 0.12,
+            maxLife: 0.12,
+            w: 2.5,
+          });
+        }
+
+        // 수축하는 응축 에너지 링
+        if (Math.random() < 0.25) {
+          this._addRing(c.x, c.y, h.size * rand(1.8, 2.5), -450, 0.35, 4);
+        }
+
+        const pulse = 0.85 + 0.25 * Math.sin(now / 50);
+        this.cores.push({ x: c.x, y: c.y, r: h.size * pulse * 1.25, rgb: t.core, alpha: 0.9 });
+        this.cores.push({ x: c.x, y: c.y, r: h.size * pulse * 0.65, rgb: '255,255,255', alpha: 0.95 });
+        this.cores.push({ x: c.x, y: c.y, r: h.size * pulse * 0.28, rgb: '255,255,255', alpha: 1.0 });
+        this.shake = Math.max(this.shake, 0.15);
         break;
       }
       case 'pinch': {

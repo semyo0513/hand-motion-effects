@@ -276,11 +276,14 @@ function setDrawingMode(on) {
     els.drawBtn.setAttribute('aria-pressed', String(next));
     els.drawBtn.classList.toggle('active', next);
   }
-  if (els.drawingToolbar) els.drawingToolbar.hidden = !next;
+  if (els.drawingToolbar) {
+    els.drawingToolbar.hidden = !next;
+    els.drawingToolbar.style.display = next ? 'flex' : 'none';
+  }
   if (next) {
-    showToast('🎨', '드로잉 스튜디오', '검지 손가락으로 화면에 그림을 그려보세요!', true);
+    showToast('🎨', '드로잉 스튜디오', '손가락 또는 마우스/터치로 화면에 그림을 그려보세요!', true);
   } else {
-    showToast('🚪', '드로잉 종료', '작성한 그림은 화면에 보존됩니다', true);
+    showToast('🚪', '드로잉 종료', '작성한 그림은 보존됩니다', true);
   }
 }
 
@@ -450,6 +453,62 @@ function bindControls() {
       chip.classList.add('active');
       drawingEngine.setTool(chip.dataset.tool);
     });
+  });
+
+  // 마우스 및 터치 드로잉 지원
+  let isMouseDown = false;
+  els.canvas.addEventListener('mousedown', (e) => {
+    if (!state.drawingMode) return;
+    isMouseDown = true;
+    const rect = els.canvas.getBoundingClientRect();
+    const scaleX = state.W / rect.width;
+    const scaleY = state.H / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    drawingEngine.drawPoint('mouse', x, y, particles);
+  });
+
+  els.canvas.addEventListener('mousemove', (e) => {
+    if (!state.drawingMode || !isMouseDown) return;
+    const rect = els.canvas.getBoundingClientRect();
+    const scaleX = state.W / rect.width;
+    const scaleY = state.H / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    drawingEngine.drawPoint('mouse', x, y, particles);
+  });
+
+  const stopMouseDraw = () => {
+    isMouseDown = false;
+    drawingEngine.liftPoint('mouse');
+  };
+  window.addEventListener('mouseup', stopMouseDraw);
+  els.canvas.addEventListener('mouseleave', stopMouseDraw);
+
+  els.canvas.addEventListener('touchstart', (e) => {
+    if (!state.drawingMode || !e.touches[0]) return;
+    const rect = els.canvas.getBoundingClientRect();
+    const scaleX = state.W / rect.width;
+    const scaleY = state.H / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    drawingEngine.drawPoint('touch', x, y, particles);
+  }, { passive: true });
+
+  els.canvas.addEventListener('touchmove', (e) => {
+    if (!state.drawingMode || !e.touches[0]) return;
+    const rect = els.canvas.getBoundingClientRect();
+    const scaleX = state.W / rect.width;
+    const scaleY = state.H / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    drawingEngine.drawPoint('touch', x, y, particles);
+  }, { passive: true });
+
+  els.canvas.addEventListener('touchend', () => {
+    drawingEngine.liftPoint('touch');
   });
 
   els.captureBtn.addEventListener('click', async () => {
