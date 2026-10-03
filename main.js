@@ -530,14 +530,22 @@ function tick(now) {
 function render(frame, now) {
   const { W, H } = state;
   ctx.save();
+  // 캔버스 상태 완전 초기화 (흐림/어두움 잔상 방지)
+  ctx.globalAlpha = 1.0;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'none';
+
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
   const s = effects.shakeOffset();
   ctx.translate(s.x, s.y);
 
-  // 카메라 영상 (거울 모드면 좌우 반전)
+  // 카메라 원본 영상 (선명하게 렌더링)
   ctx.save();
+  ctx.globalAlpha = 1.0;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'none';
   if (state.mirror) {
     ctx.translate(W, 0);
     ctx.scale(-1, 1);
@@ -545,11 +553,13 @@ function render(frame, now) {
   ctx.drawImage(els.video, 0, 0, W, H);
   ctx.restore();
 
-  // 이펙트가 돋보이도록 살짝 어둡게 (슈트 착용 중엔 더 밝게 유지)
-  ctx.fillStyle = `rgba(0,0,0,${suit.active ? CONFIG.render.dim * 0.5 : CONFIG.render.dim})`;
-  ctx.fillRect(0, 0, W, H);
+  // 슈트 착용 중에만 은은한 명암 지원 (슈트 해제 시 100% 선명)
+  if (suit.active || suit.target) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  suit.draw(ctx, W, H, now); // 장갑
+  suit.draw(ctx, W, H, now); // 슈트 아머
   particles.draw(ctx);
   effects.draw(ctx, W, H, now);
   if (state.skeleton || state.debug) drawHands(frame);

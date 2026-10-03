@@ -260,15 +260,16 @@ export class SuitRenderer {
   _drawChest(ctx, g) {
     const C = getSuitColors();
     const { S1, S2, u, down, sw, neck, chestL, chestR, H1, H2 } = g;
+
     const a1 = add(S1, u, sw * 0.12);
     const a2 = add(S2, u, -sw * 0.12);
     const c1 = add(chestL, u, sw * 0.12);
     const c2 = add(chestR, u, -sw * 0.12);
-    const nk1 = add(neck, u, -sw * 0.2);
-    const nk2 = add(neck, u, sw * 0.2);
-    const b = add(mid(c1, c2), down, sw * 0.14);
+    const nk1 = add(neck, u, -sw * 0.22);
+    const nk2 = add(neck, u, sw * 0.22);
+    const b = add(mid(c1, c2), down, sw * 0.16);
 
-    // 복부 (카본 하이테크 3단 띠)
+    // 1. 복부 (나노 카본 아머 4단 복근 띠)
     const h1 = add(H1, u, sw * 0.2);
     const h2 = add(H2, u, -sw * 0.2);
     for (let i = 0; i < 4; i++) {
@@ -278,10 +279,13 @@ export class SuitRenderer {
       const r0 = mix(c2, h2, t0);
       const l1 = mix(c1, h1, t1);
       const r1 = mix(c2, h2, t1);
+
       const gr = ctx.createLinearGradient(l0.x, l0.y, r1.x, r1.y);
       gr.addColorStop(0, C.goldHi);
-      gr.addColorStop(0.5, i % 2 ? C.gold : C.goldLo);
+      gr.addColorStop(0.3, C.gold);
+      gr.addColorStop(0.7, i % 2 === 0 ? C.goldLo : '#281a05');
       gr.addColorStop(1, C.goldLo);
+
       ctx.beginPath();
       ctx.moveTo(l0.x, l0.y);
       ctx.lineTo(r0.x, r0.y);
@@ -291,16 +295,16 @@ export class SuitRenderer {
       ctx.fillStyle = gr;
       ctx.fill();
       ctx.lineWidth = sw * 0.015;
-      ctx.strokeStyle = '#10060a';
+      ctx.strokeStyle = '#0e0508';
       ctx.stroke();
     }
 
-    // 메인 가슴 플레이트 (입체 음영)
-    const gr = ctx.createLinearGradient(g.sm.x - sw * 0.3, g.sm.y, g.hipM.x + sw * 0.3, g.hipM.y);
-    gr.addColorStop(0, C.redHi);
-    gr.addColorStop(0.35, C.red);
-    gr.addColorStop(0.85, C.redLo);
-    gr.addColorStop(1, '#1b050c');
+    // 2. 메인 가슴 플레이트 (아이언맨 흉갑 입체 음영)
+    const grChest = ctx.createLinearGradient(g.sm.x - sw * 0.4, g.sm.y, g.hipM.x + sw * 0.4, g.hipM.y);
+    grChest.addColorStop(0, C.redHi);
+    grChest.addColorStop(0.25, C.red);
+    grChest.addColorStop(0.65, C.redLo);
+    grChest.addColorStop(1, '#20050c');
 
     ctx.beginPath();
     ctx.moveTo(a1.x, a1.y);
@@ -311,25 +315,38 @@ export class SuitRenderer {
     ctx.lineTo(b.x, b.y);
     ctx.lineTo(c1.x, c1.y);
     ctx.closePath();
-    ctx.fillStyle = gr;
+    ctx.fillStyle = grChest;
     ctx.fill();
 
-    // 메탈릭 입체 베벨 외곽선
+    // 메탈릭 골드 입체 외곽선 (쇄골 테두리)
     ctx.lineJoin = 'miter';
-    ctx.lineWidth = sw * 0.04;
+    ctx.lineWidth = sw * 0.038;
     ctx.strokeStyle = C.gold;
     ctx.stroke();
 
-    ctx.lineWidth = sw * 0.015;
+    ctx.lineWidth = sw * 0.012;
     ctx.strokeStyle = C.goldHi;
     ctx.stroke();
 
-    // 가슴 패널 홈 (안쪽 디테일 라인)
+    // 쇄골 골드 덮개 플레이트
+    const collarL = mix(S1, nk1, 0.5);
+    const collarR = mix(S2, nk2, 0.5);
+    ctx.beginPath();
+    ctx.moveTo(S1.x, S1.y);
+    ctx.lineTo(collarL.x, collarL.y);
+    ctx.lineTo(g.chestC.x, g.chestC.y - sw * 0.1);
+    ctx.lineTo(collarR.x, collarR.y);
+    ctx.lineTo(S2.x, S2.y);
+    ctx.lineWidth = sw * 0.025;
+    ctx.strokeStyle = C.goldHi;
+    ctx.stroke();
+
+    // 가슴 패널 홈
     const nm = mid(nk1, nk2);
     ctx.beginPath();
     ctx.moveTo(nm.x, nm.y);
     ctx.lineTo(b.x, b.y);
-    ctx.lineWidth = sw * 0.02;
+    ctx.lineWidth = sw * 0.018;
     ctx.strokeStyle = C.goldLo;
     ctx.stroke();
   }
@@ -493,86 +510,129 @@ export class SuitRenderer {
     ctx.translate(g.hc.x, g.hc.y);
     ctx.rotate(g.ang);
 
-    // 헬멧 본체
-    const yb = lerp(0.95, -0.1, open) * u;
+    // 1. 헬멧 외곽 돔 및 턱 캡 (아이언맨 붉은 헬멧 쉘)
+    const yb = lerp(0.95, -0.15, open) * u;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-u * 1.3, -u * 1.4, u * 2.6, u * 1.4 + yb);
+    ctx.rect(-u * 1.35, -u * 1.45, u * 2.7, u * 1.45 + yb);
     ctx.clip();
-    const gr = ctx.createLinearGradient(-u * 0.7, -u, u * 0.7, u * 0.6);
-    gr.addColorStop(0, C.redHi);
-    gr.addColorStop(0.5, C.red);
-    gr.addColorStop(1, C.redLo);
+
+    const grDome = ctx.createLinearGradient(-u * 0.8, -u, u * 0.8, u * 0.8);
+    grDome.addColorStop(0, C.redHi);
+    grDome.addColorStop(0.45, C.red);
+    grDome.addColorStop(0.85, C.redLo);
+    grDome.addColorStop(1, '#1a040b');
+
     ctx.beginPath();
-    ctx.ellipse(0, 0, u * 0.74, u * 0.92, 0, 0, TAU);
-    ctx.fillStyle = gr;
+    ctx.ellipse(0, 0, u * 0.78, u * 0.95, 0, 0, TAU);
+    ctx.fillStyle = grDome;
     ctx.fill();
 
-    ctx.lineWidth = u * 0.05;
+    ctx.lineWidth = u * 0.055;
     ctx.strokeStyle = C.gold;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(0, -u * 0.92);
-    ctx.lineTo(0, -u * 0.25);
-    ctx.lineWidth = u * 0.06;
+    ctx.moveTo(0, -u * 0.95);
+    ctx.lineTo(0, -u * 0.28);
+    ctx.lineWidth = u * 0.075;
     ctx.strokeStyle = C.goldHi;
     ctx.stroke();
+
+    // 귀 분절 캡
     for (const sx of [-1, 1]) {
       ctx.beginPath();
-      ctx.arc(sx * u * 0.72, u * 0.05, u * 0.13, 0, TAU);
+      ctx.arc(sx * u * 0.76, u * 0.05, u * 0.14, 0, TAU);
       ctx.fillStyle = C.gold;
       ctx.fill();
+      ctx.lineWidth = u * 0.03;
+      ctx.strokeStyle = C.goldHi;
+      ctx.stroke();
     }
     ctx.restore();
 
-    // 페이스플레이트
+    // 2. 내부 기계 뺨 플레이트 (페이스플레이트 오픈 시 노출)
+    if (open > 0.05) {
+      ctx.save();
+      ctx.fillStyle = '#161922';
+      ctx.strokeStyle = C.goldLo;
+      ctx.lineWidth = u * 0.03;
+      for (const sx of [-1, 1]) {
+        ctx.beginPath();
+        ctx.rect(sx * u * 0.15 - u * 0.2, u * 0.1, u * 0.4, u * 0.5);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 3. 아이언맨 골드 페이스플레이트 (눈썹 및 턱선 음영)
     ctx.save();
-    ctx.translate(0, -open * u * 0.95);
-    ctx.globalAlpha *= 1 - 0.2 * open;
-    const pg = ctx.createLinearGradient(0, -u * 0.5, 0, u * 0.9);
-    pg.addColorStop(0, C.goldHi);
-    pg.addColorStop(0.5, C.gold);
-    pg.addColorStop(1, C.goldLo);
+    ctx.translate(0, -open * u * 0.98);
+    ctx.globalAlpha *= 1 - 0.18 * open;
+
+    const pgFace = ctx.createLinearGradient(0, -u * 0.6, 0, u * 0.95);
+    pgFace.addColorStop(0, C.goldHi);
+    pgFace.addColorStop(0.4, C.gold);
+    pgFace.addColorStop(0.8, C.goldLo);
+    pgFace.addColorStop(1, '#4a3306');
+
+    // 페이스플레이트 윤곽
     ctx.beginPath();
-    ctx.moveTo(-u * 0.55, -u * 0.38);
-    ctx.quadraticCurveTo(0, -u * 0.55, u * 0.55, -u * 0.38);
-    ctx.lineTo(u * 0.5, u * 0.35);
-    ctx.quadraticCurveTo(u * 0.42, u * 0.78, 0, u * 0.9);
-    ctx.quadraticCurveTo(-u * 0.42, u * 0.78, -u * 0.5, u * 0.35);
+    ctx.moveTo(-u * 0.58, -u * 0.42);
+    ctx.quadraticCurveTo(0, -u * 0.62, u * 0.58, -u * 0.42);
+    ctx.lineTo(u * 0.52, u * 0.15);
+    ctx.lineTo(u * 0.38, u * 0.55);
+    ctx.quadraticCurveTo(u * 0.25, u * 0.88, 0, u * 0.95);
+    ctx.quadraticCurveTo(-u * 0.25, u * 0.88, -u * 0.38, u * 0.55);
+    ctx.lineTo(-u * 0.52, u * 0.15);
     ctx.closePath();
-    ctx.fillStyle = pg;
+    ctx.fillStyle = pgFace;
     ctx.fill();
-    ctx.lineWidth = u * 0.035;
-    ctx.strokeStyle = C.goldLo;
+
+    ctx.lineWidth = u * 0.04;
+    ctx.strokeStyle = C.goldHi;
     ctx.stroke();
 
-    // 눈 슬릿 (광채 발광)
+    // 이마 다이아몬드 젬
+    ctx.beginPath();
+    ctx.moveTo(0, -u * 0.58);
+    ctx.lineTo(u * 0.08, -u * 0.48);
+    ctx.lineTo(0, -u * 0.38);
+    ctx.lineTo(-u * 0.08, -u * 0.48);
+    ctx.closePath();
+    ctx.fillStyle = C.goldHi;
+    ctx.fill();
+
+    // 4. 아이언맨 눈 슬릿 (광채 발광)
     for (const sx of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(sx * u * 0.42, -u * 0.02);
-      ctx.lineTo(sx * u * 0.08, u * 0.06);
-      ctx.lineTo(sx * u * 0.1, u * 0.14);
-      ctx.lineTo(sx * u * 0.44, u * 0.06);
+      ctx.moveTo(sx * u * 0.44, -u * 0.08);
+      ctx.lineTo(sx * u * 0.12, u * 0.02);
+      ctx.lineTo(sx * u * 0.14, u * 0.12);
+      ctx.lineTo(sx * u * 0.46, u * 0.02);
       ctx.closePath();
-      ctx.fillStyle = '#f8ffff';
+      ctx.fillStyle = '#ffffff';
       ctx.fill();
     }
+
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const sx of [-1, 1]) {
-      ctx.drawImage(getSprite(cyan), sx * u * 0.26 - u * 0.3, u * 0.07 - u * 0.3, u * 0.6, u * 0.6);
+      ctx.drawImage(getSprite(cyan), sx * u * 0.28 - u * 0.35, u * 0.02 - u * 0.35, u * 0.7, u * 0.7);
     }
     ctx.restore();
 
+    // 입 부위 슬릿
     ctx.strokeStyle = C.redLo;
-    ctx.lineWidth = u * 0.025;
+    ctx.lineWidth = u * 0.03;
     for (let i = -1; i <= 1; i++) {
       ctx.beginPath();
-      ctx.moveTo(i * u * 0.1, u * 0.5);
-      ctx.lineTo(i * u * 0.1, u * 0.66);
+      ctx.moveTo(i * u * 0.08, u * 0.56);
+      ctx.lineTo(i * u * 0.08, u * 0.72);
       ctx.stroke();
     }
+
     ctx.restore();
     ctx.restore();
   }
