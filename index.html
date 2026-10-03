@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a14">
+  <title>핸드 이펙트 스튜디오</title>
+  <meta name="description" content="웹캠 앞 손동작으로 불꽃·번개·충격파를 만들고 파워 슈트를 착용하는 웹앱">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <main id="stage" class="stage">
+
+    <!-- 카메라 영상 + 이펙트가 합성되는 캔버스 -->
+    <canvas id="view" aria-label="카메라 화면과 손동작 효과"></canvas>
+    <!-- 카메라 원본 (화면 밖에서 재생만) -->
+    <video id="cam" playsinline muted></video>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <!-- 상단 바 -->
+    <header id="topbar" class="topbar" hidden>
+      <div class="brand"><span class="brand-ico">✋</span><b>HAND FX</b><em>STUDIO</em></div>
+      <p id="hud" class="hud" aria-live="polite"></p>
+      <button id="settingsBtn" class="act ghost-btn" type="button" aria-label="설정">⚙️ <span>설정</span></button>
+    </header>
+
+    <!-- 동작 인식 토스트 / 안내 -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="hint" class="hint" role="status" hidden></div>
+    <div id="banner" class="banner" hidden>
+      <span id="bannerSpin" class="spin" aria-hidden="true"></span>
+      <span id="bannerText"></span>
+      <button id="retryBtn" class="mini" type="button" hidden>다시 시도</button>
+    </div>
+
+    <!-- 시작 화면 -->
+    <section id="intro" class="intro">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="grid-bg" aria-hidden="true"></div>
+      <div class="floaties" aria-hidden="true">
+        <span>✋</span><span>✌️</span><span>🤏</span><span>👏</span><span>✊</span><span>👍</span><span>☝️</span><span>🙌</span>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">MOTION · EFFECT · POWER ARMOR</p>
+        <h1>핸드 이펙트<br>스튜디오</h1>
+        <p class="lead">카메라 앞에서 손과 몸을 움직여 보세요.<br>불꽃·번개·충격파가 터지고, <b>파워 슈트 & 모션 배너</b>가 작동합니다.</p>
+
+        <ul class="feature-pills">
+          <li>🔥 불꽃</li><li>⚡ 번개</li><li>💥 폭발</li><li>🙌 에너지 구체</li><li>🦾 파워 슈트</li><li>🖼️ 커스텀 배너</li>
+        </ul>
+
+        <button id="startBtn" class="cta" type="button">
+          <span class="cta-ring" aria-hidden="true"></span>
+          <span id="startLabel">카메라 켜고 시작</span>
+        </button>
+        <p id="status" class="status" role="status"></p>
+        <p class="note">영상은 이 기기 안에서만 처리되며 서버로 전송·저장되지 않습니다.</p>
+        <footer class="intro-footer">© 2026 창순기획 All Rights Reserved</footer>
+      </div>
+    </section>
+
+    <!-- 손동작 가이드 -->
+    <aside id="guide" class="guide" aria-label="손동작 가이드" aria-hidden="true">
+      <div class="guide-head">
+        <h2>손동작 가이드</h2>
+        <button id="guideClose" class="ghost" type="button">닫기</button>
+      </div>
+
+      <h3>기본 이펙트</h3>
+      <div class="cards">
+        <div class="card"><i>✋</i><b>손바닥 펴기 (5)</b><span>손바닥 효과 & 화염 폭발</span></div>
+        <div class="card"><i>✊</i><b>주먹 (0)</b><span>에너지 응축</span></div>
+        <div class="card"><i>🤟</i><b>손가락 3개</b><span>삼중 링 & 커스텀 배너 발동</span></div>
+        <div class="card"><i>🖐️</i><b>손가락 4개</b><span>육각형 배리어 방패</span></div>
+        <div class="card"><i>🫶</i><b>두 손 하트</b><span>하트 오라 & 배너 연출</span></div>
+        <div class="card"><i>🤏</i><b>핀치</b><span>핀치 지점에서 스파크</span></div>
+        <div class="card"><i>☝️</i><b>검지 (1)</b><span>손끝 빛의 궤적</span></div>
+        <div class="card"><i>✌️</i><b>V 사인 (2)</b><span>번개 레이저 발사</span></div>
+        <div class="card"><i>🙌</i><b>두 손 펴기</b><span>에너지 구체 생성</span></div>
+        <div class="card"><i>👏</i><b>박수</b><span>화면 전체 충격파</span></div>
+      </div>
+
+      <h3>🦾 파워 슈트 & 전신 모션</h3>
+      <div class="cards">
+        <div class="card hot"><i>✊✊</i><b>두 주먹 맞대기</b><span>슈트 조립/분리 (0.6초 유지)</span></div>
+        <div class="card hot"><i>🛡️</i><b>X자 팔 교차</b><span>전신 X-Shield 장막</span></div>
+        <div class="card hot"><i>🚀</i><b>두 팔 높이</b><span>궤도 에너지 빔 소환</span></div>
+        <div class="card hot"><i>🔫</i><b>오므렸다 펴기</b><span>리펄서 빔 발사</span></div>
+      </div>
+      <p class="tip">설정(⚙️) 탭에서 각 손가락 개수별 이펙트와 커스텀 배너 이미지/글자를 직접 변경할 수 있습니다.</p>
+    </aside>
+
+    <!-- 설정 모달 -->
+    <div id="settingsModal" class="settings-modal" hidden aria-hidden="true">
+      <div class="modal-backdrop" id="modalBackdrop"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2>⚙️ 스튜디오 설정</h2>
+          <button id="modalClose" class="ghost" type="button">✕</button>
+        </div>
+
+        <nav class="modal-tabs" role="tablist">
+          <button class="tab-btn active" type="button" data-tab="tab-suit">🦾 슈트</button>
+          <button class="tab-btn" type="button" data-tab="tab-gesture">🖐️ 손가락 & 제스처</button>
+          <button class="tab-btn" type="button" data-tab="tab-banner">🖼️ 커스텀 배너</button>
+          <button class="tab-btn" type="button" data-tab="tab-motion">🕺 전신 모션</button>
+          <button class="tab-btn" type="button" data-tab="tab-general">⚙️ 일반 & 저작자</button>
+        </nav>
+
+        <div class="modal-body">
+          <!-- Tab 1: 슈트 -->
+          <section id="tab-suit" class="tab-content active">
+            <h3>🦾 아이언맨 슈트 스타일 설정</h3>
+            <div class="form-grid">
+              <label class="form-group">
+                <span>슈트 아머 프리셋</span>
+                <select id="suitPresetSelect" class="form-select">
+                  <option value="mark85">Mark 85 Classic (클래식 레드·골드)</option>
+                  <option value="markL">Mark L Nano-Tech (나노 사파이어·사이언)</option>
+                  <option value="stealth">Stealth Spec-Ops (스텔스 매트 블랙·골드)</option>
+                  <option value="warMachine">War Machine (워머신 실버·크림슨)</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span>아크 리액터 발광색</span>
+                <select id="suitReactorColorSelect" class="form-select">
+                  <option value="120,230,255">청록 네온 (Default Cyan)</option>
+                  <option value="255,100,80">크림슨 레드 (Crimson Red)</option>
+                  <option value="255,215,0">골드 플라즈마 (Gold Plasma)</option>
+                  <option value="180,90,255">바이올렛 바이올렛 (Violet Quantum)</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span>슈트 스케일 (크기)</span>
+                <input id="suitScaleInput" type="range" min="0.7" max="1.4" step="0.05" value="1.0">
+              </label>
+
+              <label class="form-switch">
+                <input id="suitHudCheck" type="checkbox" checked>
+                <span>슈트 HUD 텔레메트리 레이어 표시</span>
+              </label>
+            </div>
+          </section>
+
+          <!-- Tab 2: 손가락 & 제스처 -->
+          <section id="tab-gesture" class="tab-content">
+            <h3>🖐️ 손가락 개수 및 제스처 매핑</h3>
+            <p class="subtext">카메라에 보이는 펼쳐진 손가락 개수에 따라 이펙트와 커스텀 배너를 동작시킵니다.</p>
+
+            <div class="mapping-list">
+              <div class="map-item"><span>✊ 손가락 0개 (주먹):</span> <b>에너지 응축 & 리펄서 장전</b></div>
+              <div class="map-item"><span>☝️ 손가락 1개 (검지):</span> <b>플라즈마 레이저 궤적</b></div>
+              <div class="map-item"><span>✌️ 손가락 2개 (V사인):</span> <b>번개 스파크</b></div>
+              <div class="map-item"><span>🤟 손가락 3개:</span> <b>삼중 링 & 커스텀 배너 발동</b></div>
+              <div class="map-item"><span>🖐️ 손가락 4개:</span> <b>육각형 쉴드 장막</b></div>
+              <div class="map-item"><span>✋ 손가락 5개 (손바닥):</span> <b>리펄서 화염 폭발</b></div>
+            </div>
+          </section>
+
+          <!-- Tab 3: 커스텀 배너 -->
+          <section id="tab-banner" class="tab-content">
+            <h3>🖼️ 특정 모션 시 커스텀 이미지 / 글자 배너 표시</h3>
+            <div class="form-grid">
+              <label class="form-group">
+                <span>배너 문구 (텍스트)</span>
+                <input id="bannerTextInput" type="text" class="form-input" value="2026 창순기획 HAND MOTION STUDIO">
+              </label>
+
+              <div class="form-group">
+                <span>배너 이미지 업로드 (선택)</span>
+                <input id="bannerFileInput" type="file" accept="image/*" class="form-file">
+                <div id="bannerImgPreview" class="img-preview">이미지 미선택</div>
+              </div>
+
+              <label class="form-group">
+                <span>발동 트리거 모션</span>
+                <select id="bannerTriggerSelect" class="form-select">
+                  <option value="finger_3">🤟 손가락 3개 감지 시</option>
+                  <option value="heart">🫶 두 손 하트 동작 시</option>
+                  <option value="clap">👏 박수 칠 때</option>
+                  <option value="suit_on">🦾 파워 슈트 장착 시</option>
+                  <option value="finger_5">✋ 손바닥 (손가락 5개) 시</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span>배너 스타일</span>
+                <select id="bannerStyleSelect" class="form-select">
+                  <option value="neon">네온 글래스 (Neon Glass)</option>
+                  <option value="hologram">사이버 홀로그램 (Hologram)</option>
+                  <option value="gold">골드 메탈릭 (Metallic Gold)</option>
+                  <option value="glass">투명 글래스모피즘 (Glass)</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span>애니메이션 연출</span>
+                <select id="bannerAnimSelect" class="form-select">
+                  <option value="zoom">확대 등장 (Explosive Zoom)</option>
+                  <option value="slide">상단 슬라이드 (Slide Down)</option>
+                  <option value="pulse">홀로그램 맥동 (Pulse)</option>
+                </select>
+              </label>
+
+              <div class="form-actions">
+                <button id="testBannerBtn" class="act" type="button">✨ 배너 테스트 실행</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Tab 4: 전신 모션 -->
+          <section id="tab-motion" class="tab-content">
+            <h3>🕺 전신 모션 인식 이펙트</h3>
+            <div class="form-grid">
+              <label class="form-switch">
+                <input id="bodyMotionCheck" type="checkbox" checked>
+                <span>전신 포즈 모션 인식 켜기</span>
+              </label>
+              <label class="form-switch">
+                <input id="xShieldCheck" type="checkbox" checked>
+                <span>🛡️ X자 팔 교차 (X-Shield 쉴드 배리어)</span>
+              </label>
+              <label class="form-switch">
+                <input id="skyStrikeCheck" type="checkbox" checked>
+                <span>🚀 두 팔 높이 들기 (Sky Strike 궤도 빔)</span>
+              </label>
+            </div>
+          </section>
+
+          <!-- Tab 5: 일반 & 저작자 -->
+          <section id="tab-general" class="tab-content">
+            <h3>⚙️ 일반 시스템 & 저작권 정보</h3>
+            <div class="copyright-box">
+              <h4>HAND MOTION EFFECTS STUDIO</h4>
+              <p>웹캠 기반 실시간 손동작 / 모션 인식 이펙트 웹앱</p>
+              <div class="c-badge">© 2026 창순기획 All Rights Reserved</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 컨트롤 -->
+    <nav id="dock" class="dock" hidden aria-label="컨트롤">
+      <div id="themes" class="themes" role="radiogroup" aria-label="테마"></div>
+
+      <div class="sep" aria-hidden="true"></div>
+
+      <button id="suitBtn" class="act suit" type="button" aria-pressed="false">🦾 <span>파워 슈트</span></button>
+      <button id="faceBtn" class="act" type="button" aria-pressed="false" hidden>😎 <span>페이스플레이트</span></button>
+      <button id="dockSettingsBtn" class="act" type="button">⚙️ <span>설정</span></button>
+
+      <div class="sep" aria-hidden="true"></div>
+
+      <label class="range"><span>안정도</span><input id="stable" type="range" min="1" max="8" step="1" value="3"></label>
+      <label class="range"><span>강도</span><input id="intensity" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+
+      <label class="switch"><input id="mirror" type="checkbox" checked><span class="track"></span><span class="lbl">거울</span></label>
+      <label class="switch"><input id="skeleton" type="checkbox" checked><span class="track"></span><span class="lbl">손 표시</span></label>
+      <label class="switch"><input id="debug" type="checkbox"><span class="track"></span><span class="lbl">디버그</span></label>
+
+      <div class="sep" aria-hidden="true"></div>
+
+      <button id="guideBtn" class="act" type="button">📖 <span>가이드</span></button>
+      <button id="captureBtn" class="act" type="button">📸 <span>캡처</span></button>
+      <button id="recordBtn" class="act" type="button">⏺ <span id="recordLabel">녹화</span></button>
+      <button id="fsBtn" class="act" type="button">⛶ <span>전체화면</span></button>
+    </nav>
+    <footer class="app-footer" hidden>© 2026 창순기획</footer>
+  </main>
+
+  <!-- 부팅 점검: main.js가 불러와지지 않을 때 원인을 화면에 알려 준다 (일반 스크립트) -->
+  <script>
+    (function () {
+      var s = document.getElementById('status');
+      var b = document.getElementById('startBtn');
+      window.__booted = false;
+      function say(msg) { s.textContent = msg; s.className = 'status error'; }
+      if (location.protocol === 'file:') {
+        say('index.html을 파일로 직접 열면 동작하지 않습니다. GitHub Pages 주소(https://…)로 접속하거나, 폴더에서 "python -m http.server 8000" 실행 후 localhost:8000으로 접속해 주세요.');
+      }
+      b.addEventListener('click', function () {
+        if (!window.__booted) say('앱 스크립트를 아직 불러오지 못했습니다. 새로고침(Ctrl+Shift+R) 후 다시 눌러 주세요. 계속되면 F12 → Console의 빨간 오류를 알려 주세요.');
+      });
+      window.addEventListener('error', function (e) {
+        if (!window.__booted) say('스크립트 오류: ' + (e.message || (e.target && (e.target.src || e.target.href)) || '로딩 실패') + ' (F12 → Console 확인)');
+      }, true);
+    })();
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

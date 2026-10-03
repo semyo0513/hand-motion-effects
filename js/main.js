@@ -1,0 +1,626 @@
+/**
+ * main.js — 앱 시작점: 초기화, 메인 루프, UI 연결, 파워 슈트 제어
+ *
+ * 시작 흐름 (멈춘 것처럼 보이지 않도록 단계별로 즉시 피드백)
+ *  1) 버튼 클릭 → 카메라 연결(허용 안내 문구)
+ *  2) 카메라가 켜지면 바로 무대 화면으로 전환 (영상이 먼저 보임)
+ *  3) 손 인식 모델은 배너로 진행 상황을 보여 주며 뒤에서 로딩 (실패 시 '다시 시도' 버튼)
+ */
+import { CONFIG } from './config.js';
+import { startCamera, explainCameraError } from './camera.js';
+import { HandTracker } from './handTracker.js';
+import { GestureEngine } from './gestureEngine.js';
+import { ParticleSystem, getSprite } from './particles.js';
+import { EffectManager } from './effects.js';
+import { SuitRenderer } from './suit.js';
+import { THEMES } from './themes.js';
+import { Recorder } from './recorder.js';
+import { BannerManager } from './bannerSystem.js';
+
+const $ = (id) => document.getElementById(id);
+
+const els = {
+  stage: $('stage'),
+  canvas: $('view'),
+  video: $('cam'),
+  topbar: $('topbar'),
+  hud: $('hud'),
+  toast: $('toast'),
+  hint: $('hint'),
+  banner: $('banner'),
+  bannerText: $('bannerText'),
+  retryBtn: $('retryBtn'),
+  intro: $('intro'),
+  startBtn: $('startBtn'),
+  startLabel: $('startLabel'),
+  status: $('status'),
+  guide: $('guide'),
+  guideBtn: $('guideBtn'),
+  guideClose: $('guideClose'),
+  dock: $('dock'),
+  themes: $('themes'),
+  suitBtn: $('suitBtn'),
+  faceBtn: $('faceBtn'),
+  stable: $('stable'),
+  intensity: $('intensity'),
+  mirror: $('mirror'),
+  skeleton: $('skeleton'),
+  debug: $('debug'),
+  captureBtn: $('captureBtn'),
+  recordBtn: $('recordBtn'),
+  recordLabel: $('recordLabel'),
+  fsBtn: $('fsBtn'),
+
+  // 설정 모달
+  settingsBtn: $('settingsBtn'),
+  dockSettingsBtn: $('dockSettingsBtn'),
+  settingsModal: $('settingsModal'),
+  modalClose: $('modalClose'),
+  modalBackdrop: $('modalBackdrop'),
+  suitPresetSelect: $('suitPresetSelect'),
+  suitReactorColorSelect: $('suitReactorColorSelect'),
+  suitScaleInput: $('suitScaleInput'),
+  suitHudCheck: $('suitHudCheck'),
+  bannerTextInput: $('bannerTextInput'),
+  bannerFileInput: $('bannerFileInput'),
+  bannerImgPreview: $('bannerImgPreview'),
+  bannerTriggerSelect: $('bannerTriggerSelect'),
+  bannerStyleSelect: $('bannerStyleSelect'),
+  bannerAnimSelect: $('bannerAnimSelect'),
+  testBannerBtn: $('testBannerBtn'),
+  bodyMotionCheck: $('bodyMotionCheck'),
+  xShieldCheck: $('xShieldCheck'),
+  skyStrikeCheck: $('skyStrikeCheck'),
+};
+
+const ctx = els.canvas.getContext('2d');
+const tracker = new HandTracker();
+const gestures = new GestureEngine();
+const particles = new ParticleSystem(CONFIG.particles.max);
+const bannerManager = new BannerManager();
+const effects = new EffectManager(particles, bannerManager);
+const suit = new SuitRenderer();
+const recorder = new Recorder(els.canvas);
+
+
+const state = { running: false, mirror: true, skeleton: true, debug: false, W: 1280, H: 720, suitLoading: false };
+
+const GESTURE_INFO = {
+  open: { emoji: '✋', name: '손바닥', desc: '효과가 피어올라요' },
+  fist: { emoji: '✊', name: '주먹', desc: '에너지를 모으는 중' },
+  pinch: { emoji: '🤏', name: '핀치', desc: '스파크가 튀어요' },
+  point: { emoji: '☝️', name: '검지', desc: '빛의 궤적을 그려요' },
+  peace: { emoji: '✌️', name: 'V 사인', desc: '번개가 뻗어 나가요' },
+  thumbsUp: { emoji: '👍', name: '엄지 척', desc: '테마 전환' },
+};
+const GESTURE_LABEL = { open: '손바닥', fist: '주먹', pinch: '핀치', point: '검지', peace: 'V', thumbsUp: '엄지 척', none: '-' };
+const GESTURE_EMOJI = { open: '✋', fist: '✊', pinch: '🤏', point: '☝️', peace: '✌️', thumbsUp: '👍', none: '·' };
+const HAND_LINES = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
+];
+const TIPS = [4, 8, 12, 16, 20];
+
+// 모션 줄이기 설정 존중: 화면 흔들림 끄기
+if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  effects.shakeEnabled = false;
+}
+
+/* ===================== 공통 UI 도우미 ===================== */
+
+function setStatus(msg, isError = false) {
+  els.status.textContent = msg;
+  els.status.classList.toggle('error', isError);
+}
+
+/** 상단 배너: 진행/완료/오류 상태 표시 */
+function showBanner(text, mode = 'loading', retry = false) {
+  els.banner.hidden = false;
+  els.banner.className = 'banner ' + mode; // loading | ok | err
+  els.bannerText.textContent = text;
+  els.retryBtn.hidden = !retry;
+}
+function hideBanner() {
+  els.banner.hidden = true;
+}
+
+let hintOn = false;
+function setHint(text) {
+  if (!text) {
+    if (hintOn) els.hint.hidden = true;
+    hintOn = false;
+    return;
+  }
+  els.hint.textContent = text;
+  els.hint.hidden = false;
+  hintOn = true;
+}
+
+/** 중앙 상단 토스트 (Web Animations API로 매번 새로 재생) */
+let lastToastAt = 0;
+function showToast(emoji, name, desc, force = false) {
+  const now = performance.now();
+  if (!force && now - lastToastAt < 500) return;
+  lastToastAt = now;
+  const t = els.toast;
+  t.innerHTML = `<span class="ti">${emoji}</span><span><b>${name}</b><br><small>${desc}</small></span>`;
+  t.hidden = false;
+  const keyframes = [
+    { opacity: 0, transform: 'translate(-50%, 12px) scale(0.85)' },
+    { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.12 },
+    { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.75 },
+    { opacity: 0, transform: 'translate(-50%, -8px) scale(0.98)' },
+  ];
+  t.getAnimations().forEach((a) => a.cancel());
+  const anim = t.animate(keyframes, { duration: 1500, easing: 'ease-out' });
+  anim.onfinish = () => {
+    t.hidden = true;
+  };
+}
+
+/* ===================== 테마 ===================== */
+
+function applyAccent() {
+  const th = effects.theme;
+  els.stage.style.setProperty('--acc', th.core);
+  els.stage.style.setProperty('--acc2', th.palette[2]);
+}
+
+function buildThemeButtons() {
+  els.themes.innerHTML = '';
+  THEMES.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(i === effects.themeIndex));
+    b.innerHTML = `${t.emoji} ${t.label}`;
+    b.addEventListener('click', () => effects.setTheme(i));
+    els.themes.appendChild(b);
+  });
+}
+
+let themeChanged = false;
+effects.onThemeChange = () => {
+  themeChanged = true;
+  [...els.themes.children].forEach((b, i) => b.setAttribute('aria-checked', String(i === effects.themeIndex)));
+  applyAccent();
+};
+
+/* ===================== 파워 슈트 ===================== */
+
+function syncSuitButtons() {
+  const on = suit.target;
+  els.suitBtn.setAttribute('aria-pressed', String(on));
+  els.faceBtn.hidden = !on;
+}
+
+/** 슈트 켜기/끄기. 처음 켤 때 몸 인식 모델을 불러온다. */
+async function setSuit(on) {
+  if (state.suitLoading) return;
+  if (on && !tracker.poseReady) {
+    state.suitLoading = true;
+    showBanner('슈트 시스템(몸 인식) 불러오는 중…', 'loading');
+    try {
+      await tracker.initPose((msg) => showBanner(msg, 'loading'));
+      hideBanner();
+    } catch (e) {
+      console.error(e);
+      showBanner('몸 인식을 불러오지 못했습니다: ' + (e.message || e), 'err');
+      state.suitLoading = false;
+      return;
+    }
+    state.suitLoading = false;
+  }
+  suit.setOn(on);
+  effects.setSuitMode(on);
+  syncSuitButtons();
+  if (on) showToast('🦾', '파워 슈트 호출', '상체가 보이게 서 주세요', true);
+  else showToast('🛡️', '슈트 해제', '장갑이 분리돼요', true);
+}
+
+/** 두 주먹을 맞대고 일정 시간 유지하면 슈트 켜기/끄기 */
+let fistStart = 0;
+let lastSuitToggle = -1e9;
+function handleSuitCall(frame, now) {
+  const tw = frame.two;
+  const together = tw && tw.bothFist && tw.dist < tw.avgSize * 2.6;
+  if (together && !state.suitLoading) {
+    if (!fistStart) fistStart = now;
+    const p = Math.min(1, (now - fistStart) / CONFIG.suit.callHoldMs);
+    suit.setCall(now - lastSuitToggle < CONFIG.suit.toggleCooldownMs ? 0 : p, tw.mid);
+    if (p >= 1 && now - lastSuitToggle > CONFIG.suit.toggleCooldownMs) {
+      lastSuitToggle = now;
+      fistStart = 0;
+      suit.setCall(0, null);
+      setSuit(!suit.target);
+    }
+  } else {
+    fistStart = 0;
+    suit.setCall(0, null);
+  }
+}
+
+/* ===================== 토스트(동작 인식 안내) ===================== */
+
+let prevBothOpen = false;
+function toastFromFrame(frame) {
+  const ev = frame.events;
+  const has = (t) => ev.find((e) => e.type === t);
+  let pick = null;
+  let force = false;
+  if (has('clap')) {
+    pick = ['👏', '박수', '화면 전체 충격파!'];
+    force = true;
+  } else if (has('release')) {
+    pick = effects.suitMode ? ['🔫', '리펄서 발사', '손 방향으로 빔이 나가요'] : ['💥', '방출', '폭발과 충격파'];
+    force = true;
+  } else if (has('charge')) {
+    pick = ['🌀', '응축', '빛이 손으로 빨려 들어가요'];
+  } else if (themeChanged) {
+    pick = [effects.theme.emoji, '테마 전환', `${effects.theme.label} 테마`];
+    force = true;
+  } else if (frame.two && frame.two.bothOpen && !prevBothOpen) {
+    pick = effects.suitMode ? ['🚀', '비행 모드', '두 손을 아래로 내려 보세요'] : ['🙌', '에너지 구체', '두 손 간격으로 크기를 조절해요'];
+  } else {
+    const en = ev.find((e) => e.type === 'enter' && GESTURE_INFO[e.gesture]);
+    if (en) {
+      const i = GESTURE_INFO[en.gesture];
+      pick = [i.emoji, i.name, i.desc];
+    }
+  }
+  themeChanged = false;
+  prevBothOpen = !!(frame.two && frame.two.bothOpen);
+  if (pick) showToast(pick[0], pick[1], pick[2], force);
+}
+
+/* ===================== 컨트롤 연결 ===================== */
+
+function bindControls() {
+  els.stable.addEventListener('input', () => gestures.setStableFrames(els.stable.value));
+  els.intensity.addEventListener('input', () => effects.setIntensity(els.intensity.value));
+  els.mirror.addEventListener('change', () => {
+    state.mirror = els.mirror.checked;
+    effects.reset();
+    suit.resetTracking();
+  });
+  els.skeleton.addEventListener('change', () => (state.skeleton = els.skeleton.checked));
+  els.debug.addEventListener('change', () => (state.debug = els.debug.checked));
+
+  els.suitBtn.addEventListener('click', () => setSuit(!suit.target));
+  els.faceBtn.addEventListener('click', () => {
+    suit.setFaceOpen(!suit.faceIsOpen);
+    els.faceBtn.setAttribute('aria-pressed', String(suit.faceIsOpen));
+  });
+
+  const toggleGuide = (open) => {
+    const next = open === undefined ? !els.guide.classList.contains('open') : open;
+    els.guide.classList.toggle('open', next);
+    els.guide.setAttribute('aria-hidden', String(!next));
+  };
+  els.guideBtn.addEventListener('click', () => toggleGuide());
+  els.guideClose.addEventListener('click', () => toggleGuide(false));
+
+  const toggleSettings = (open) => {
+    const next = open === undefined ? els.settingsModal.hidden : open;
+    els.settingsModal.hidden = !next;
+    els.settingsModal.setAttribute('aria-hidden', String(!next));
+  };
+  if (els.settingsBtn) els.settingsBtn.addEventListener('click', () => toggleSettings(true));
+  if (els.dockSettingsBtn) els.dockSettingsBtn.addEventListener('click', () => toggleSettings(true));
+  if (els.modalClose) els.modalClose.addEventListener('click', () => toggleSettings(false));
+  if (els.modalBackdrop) els.modalBackdrop.addEventListener('click', () => toggleSettings(false));
+
+  // 탭 전환
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+  tabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach((b) => b.classList.remove('active'));
+      tabContents.forEach((c) => c.classList.remove('active'));
+      btn.classList.add('active');
+      const targetTab = $(btn.dataset.tab);
+      if (targetTab) targetTab.classList.add('active');
+    });
+  });
+
+  // 설정 폼 바인딩
+  if (els.suitPresetSelect) els.suitPresetSelect.addEventListener('change', (e) => (CONFIG.suit.preset = e.target.value));
+  if (els.suitReactorColorSelect) els.suitReactorColorSelect.addEventListener('change', (e) => (CONFIG.suit.reactorColor = e.target.value));
+  if (els.suitScaleInput) els.suitScaleInput.addEventListener('input', (e) => (CONFIG.suit.scale = parseFloat(e.target.value) || 1.0));
+  if (els.suitHudCheck) els.suitHudCheck.addEventListener('change', () => (CONFIG.suit.hudEnabled = els.suitHudCheck.checked));
+
+  if (els.bannerTextInput) els.bannerTextInput.addEventListener('input', (e) => bannerManager.setText(e.target.value));
+  if (els.bannerTriggerSelect) els.bannerTriggerSelect.addEventListener('change', (e) => bannerManager.setTriggerGesture(e.target.value));
+  if (els.bannerStyleSelect) els.bannerStyleSelect.addEventListener('change', (e) => bannerManager.setStyle(e.target.value));
+  if (els.bannerAnimSelect) els.bannerAnimSelect.addEventListener('change', (e) => bannerManager.setAnimation(e.target.value));
+  if (els.testBannerBtn) els.testBannerBtn.addEventListener('click', () => bannerManager.fire(performance.now()));
+
+  if (els.bannerFileInput) {
+    els.bannerFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          bannerManager.setImage(ev.target.result);
+          if (els.bannerImgPreview) {
+            els.bannerImgPreview.innerHTML = `<img src="${ev.target.result}" alt="미리보기">`;
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (els.bodyMotionCheck) els.bodyMotionCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.enabled = e.target.checked));
+  if (els.xShieldCheck) els.xShieldCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.xShield = e.target.checked));
+  if (els.skyStrikeCheck) els.skyStrikeCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.skyStrike = e.target.checked));
+
+  els.captureBtn.addEventListener('click', async () => {
+    try {
+      await recorder.capture();
+      showToast('📸', '캡처 완료', 'PNG 파일로 저장했어요', true);
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  els.recordBtn.addEventListener('click', () => {
+    try {
+      if (recorder.recording) {
+        recorder.stop();
+        els.recordLabel.textContent = '녹화';
+        els.recordBtn.classList.remove('rec');
+      } else {
+        recorder.start();
+        els.recordLabel.textContent = '중지·저장';
+        els.recordBtn.classList.add('rec');
+      }
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  els.fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (els.stage.requestFullscreen) els.stage.requestFullscreen();
+  });
+
+  els.retryBtn.addEventListener('click', loadModel);
+
+  // 단축키: 1~5 테마, D 디버그, G 가이드, S 슈트, F 페이스플레이트, O 설정
+  window.addEventListener('keydown', (e) => {
+    if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (!state.running) return;
+    const n = Number(e.key);
+    const k = e.key.toLowerCase();
+    if (n >= 1 && n <= THEMES.length) effects.setTheme(n - 1);
+    else if (k === 'd') {
+      els.debug.checked = !els.debug.checked;
+      state.debug = els.debug.checked;
+    } else if (k === 'g') toggleGuide();
+    else if (k === 's') setSuit(!suit.target);
+    else if (k === 'f' && suit.target) els.faceBtn.click();
+    else if (k === 'o') toggleSettings();
+  });
+
+  if (!Recorder.supported()) {
+    els.recordBtn.disabled = true;
+    els.recordBtn.title = '이 브라우저는 녹화를 지원하지 않습니다';
+  }
+}
+
+/* ===================== 시작 ===================== */
+
+function resetStartButton(label) {
+  els.startBtn.disabled = false;
+  els.startBtn.classList.remove('busy');
+  els.startLabel.textContent = label;
+}
+
+async function start() {
+  els.startBtn.disabled = true;
+  els.startBtn.classList.add('busy');
+  els.startLabel.textContent = '카메라 연결 중…';
+  setStatus('브라우저 상단에 카메라 허용 창이 뜨면 “허용”을 눌러 주세요.');
+  const hintTimer = setTimeout(
+    () => setStatus('허용 창이 안 보이면 주소창 왼쪽 카메라/자물쇠 아이콘에서 카메라를 “허용”으로 바꿔 주세요.'),
+    10000
+  );
+
+  try {
+    await startCamera(els.video);
+  } catch (e) {
+    clearTimeout(hintTimer);
+    console.error(e);
+    setStatus(explainCameraError(e), true);
+    resetStartButton('다시 시도');
+    return;
+  }
+  clearTimeout(hintTimer);
+
+  // 카메라가 켜지면 바로 무대로 전환 (모델은 뒤에서 로딩)
+  state.W = els.video.videoWidth || 1280;
+  state.H = els.video.videoHeight || 720;
+  els.canvas.width = state.W;
+  els.canvas.height = state.H;
+  effects.setBounds(state.W, state.H);
+
+  els.intro.classList.add('leaving');
+  setTimeout(() => (els.intro.hidden = true), 650);
+  els.topbar.hidden = false;
+  els.dock.hidden = false;
+  applyAccent();
+  state.running = true;
+  requestAnimationFrame(loop);
+
+  loadModel();
+}
+
+/** 손 인식 모델 로딩 (배너로 진행 상황 표시, 실패 시 재시도 버튼) */
+async function loadModel() {
+  showBanner('손 인식 준비 중…', 'loading');
+  try {
+    await tracker.init((msg) => showBanner(msg, 'loading'));
+    showBanner('준비 완료! 카메라에 손을 보여 주세요 ✨', 'ok');
+    setTimeout(() => {
+      if (els.banner.classList.contains('ok')) hideBanner();
+    }, 3500);
+  } catch (e) {
+    console.error(e);
+    showBanner('손 인식을 시작하지 못했습니다: ' + (e.message || e), 'err', true);
+  }
+}
+
+/* ===================== 메인 루프 ===================== */
+
+let lastT = performance.now();
+let fpsAcc = 0;
+let fpsFrames = 0;
+let fps = 0;
+let loopErrorShown = false;
+
+function loop(now) {
+  if (!state.running) return;
+  requestAnimationFrame(loop);
+  try {
+    tick(now);
+  } catch (e) {
+    console.error(e);
+    if (!loopErrorShown) {
+      loopErrorShown = true;
+      showBanner('화면 처리 중 오류가 발생했습니다: ' + (e.message || e), 'err');
+    }
+  }
+}
+
+function tick(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+  fpsAcc += dt;
+  fpsFrames += 1;
+  if (fpsAcc >= 0.5) {
+    fps = Math.round(fpsFrames / fpsAcc);
+    fpsAcc = 0;
+    fpsFrames = 0;
+  }
+
+  const result = tracker.detect(els.video, now);
+  const frame = gestures.update(result, state.W, state.H, state.mirror, now);
+
+  const pose = suit.active || suit.target || (CONFIG.bodyMotion && CONFIG.bodyMotion.enabled) ? tracker.detectPose(els.video, now) : null;
+  const poseMotion = gestures.updatePose(pose, state.W, state.H, state.mirror, now);
+
+  suit.update(pose, state.W, state.H, state.mirror, dt, now);
+  for (const l of suit.consumeLands()) {
+    effects.burstAt(l.x, l.y, l.name === 'helmet' ? 90 : 45, l.size);
+  }
+  handleSuitCall(frame, now);
+  setHint(suit.target && suit.active && !suit.poseOk ? '상체(어깨)가 화면에 보이도록 조금 뒤로 물러서 주세요' : '');
+
+  effects.update(frame, dt, now, poseMotion);
+  particles.update(dt);
+  toastFromFrame(frame);
+
+  render(frame, now);
+  updateHud(frame);
+}
+
+
+function render(frame, now) {
+  const { W, H } = state;
+  ctx.save();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  const s = effects.shakeOffset();
+  ctx.translate(s.x, s.y);
+
+  // 카메라 영상 (거울 모드면 좌우 반전)
+  ctx.save();
+  if (state.mirror) {
+    ctx.translate(W, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(els.video, 0, 0, W, H);
+  ctx.restore();
+
+  // 이펙트가 돋보이도록 살짝 어둡게 (슈트 착용 중엔 더 밝게 유지)
+  ctx.fillStyle = `rgba(0,0,0,${suit.active ? CONFIG.render.dim * 0.5 : CONFIG.render.dim})`;
+  ctx.fillRect(0, 0, W, H);
+
+  suit.draw(ctx, W, H, now); // 장갑
+  particles.draw(ctx);
+  effects.draw(ctx, W, H, now);
+  if (state.skeleton || state.debug) drawHands(frame);
+  suit.drawHud(ctx, W, H, now, frame.hands);
+  suit.drawOverlay(ctx, W, H, now);
+  if (state.debug) drawDebug(frame);
+  ctx.restore();
+}
+
+/** 손 윤곽 + 손끝 빛 (인식되고 있다는 것을 바로 보여 준다) */
+function drawHands(frame) {
+  const th = effects.theme;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  for (const h of frame.hands) {
+    ctx.beginPath();
+    for (const [a, b] of HAND_LINES) {
+      ctx.moveTo(h.pts[a].x, h.pts[a].y);
+      ctx.lineTo(h.pts[b].x, h.pts[b].y);
+    }
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const spr = getSprite(effects.suitMode ? '120,230,255' : th.core);
+    for (const i of TIPS) {
+      ctx.drawImage(spr, h.pts[i].x - 16, h.pts[i].y - 16, 32, 32);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+}
+
+function drawDebug(frame) {
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 22px sans-serif';
+  for (const h of frame.hands) {
+    for (const p of h.pts) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const label = `${GESTURE_LABEL[h.gesture] || h.gesture} (${GESTURE_LABEL[h.raw] || h.raw})`;
+    ctx.fillText(label, h.center.x - 40, h.center.y - h.size * 1.4);
+  }
+  const pose = suit.poseOk ? '몸 OK' : '몸 -';
+  ctx.fillText(`FPS ${fps} · ${tracker.delegate} · 파티클 ${particles.count} · ${pose}`, 16, state.H - 16);
+  ctx.restore();
+}
+
+function updateHud(frame) {
+  const g = frame.hands.map((h) => GESTURE_EMOJI[h.gesture] || '·').join(' ');
+  const suitTag = suit.target ? ' · 🦾' : '';
+  els.hud.textContent = `${effects.theme.emoji} ${effects.theme.label}${suitTag} · ${g || '손을 보여 주세요'}`;
+}
+
+/* ===================== 초기화 ===================== */
+
+buildThemeButtons();
+applyAccent();
+bindControls();
+els.startBtn.addEventListener('click', start);
+
+// 탭이 숨겨지면 녹화 중지 (실수로 길게 녹화되는 것 방지)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && recorder.recording) {
+    recorder.stop();
+    els.recordLabel.textContent = '녹화';
+    els.recordBtn.classList.remove('rec');
+  }
+});
+
+// 모듈이 정상 실행되었음을 index.html의 부팅 점검에 알린다
+window.__booted = true;
