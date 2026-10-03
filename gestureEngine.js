@@ -38,6 +38,7 @@ export class GestureEngine {
     this.slots = [this._newSlot(), this._newSlot()];
     this.palmHist = [];
     this.lastClapAt = -1e9;
+    this.lastHeartAt = -1e9;
   }
 
   /** 인식 안정도(디바운스 프레임 수) 설정 — 1~8로 제한 */
@@ -188,7 +189,7 @@ export class GestureEngine {
       }
     });
 
-    // ④ 두 손 조합 & 하트 제스처 감지
+    // ④ 두 손 조합 & 하트 / 박수 제스처 감지
     let two = null;
     if (assigned.length === 2) {
       const [a, b] = assigned;
@@ -198,24 +199,35 @@ export class GestureEngine {
       const bothOpen = this.slots[a.slot].stable === 'open' && this.slots[b.slot].stable === 'open';
       const bothFist = this.slots[a.slot].stable === 'fist' && this.slots[b.slot].stable === 'fist';
 
-      // 하트 제스처 감지: 양 손의 검지 끝과 엄지 끝이 가까움
+      // 하트 제스처 감지: 양 손의 검지 끝과 엄지 끝이 가까움 (또는 손가락 하트)
       const idxDist = dist(a.pts[8], b.pts[8]);
       const thmDist = dist(a.pts[4], b.pts[4]);
-      if (idxDist < avg * 0.85 && thmDist < avg * 0.85) {
+      if (idxDist < avg * 1.55 && thmDist < avg * 1.55 && now - this.lastHeartAt > 400) {
+        this.lastHeartAt = now;
         events.push({ type: 'heart', x: mid.x, y: mid.y, size: avg });
       }
 
       this.palmHist.push({ t: now, d });
-      while (this.palmHist.length && now - this.palmHist[0].t > 350) this.palmHist.shift();
+      while (this.palmHist.length && now - this.palmHist[0].t > 400) this.palmHist.shift();
       const maxD = Math.max(...this.palmHist.map((h) => h.d));
 
-      if (d < avg * 1.7 && maxD > avg * 3.4 && now - this.lastClapAt > CONFIG.gesture.clapCooldownMs) {
+      // 박수 감지: 두 손 사이 거리가 빠르게 좁아져 가까워질 때
+      if (d < avg * 2.2 && maxD > avg * 2.5 && now - this.lastClapAt > (CONFIG.gesture.clapCooldownMs || 800)) {
         this.lastClapAt = now;
         this.palmHist.length = 0;
         events.push({ type: 'clap', x: mid.x, y: mid.y, size: avg });
       }
       two = { a: a.center, b: b.center, mid, dist: d, bothOpen, bothFist, avgSize: avg };
     } else {
+      // 한 손 하트 (미니 하트: 엄지-검지 교차)
+      for (const a of assigned) {
+        const pClose = dist(a.pts[4], a.pts[8]) < a.size * 0.4;
+        const middleFold = dist(a.pts[12], a.pts[0]) < a.size * 1.0;
+        if (pClose && middleFold && now - this.lastHeartAt > 600) {
+          this.lastHeartAt = now;
+          events.push({ type: 'heart', x: a.center.x, y: a.center.y - a.size * 0.6, size: a.size });
+        }
+      }
       this.palmHist.length = 0;
     }
 

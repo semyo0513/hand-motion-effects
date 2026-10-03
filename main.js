@@ -45,6 +45,7 @@ const els = {
   intensity: $('intensity'),
   mirror: $('mirror'),
   skeleton: $('skeleton'),
+  toastToggle: $('toastToggle'),
   debug: $('debug'),
   captureBtn: $('captureBtn'),
   recordBtn: $('recordBtn'),
@@ -82,8 +83,7 @@ const effects = new EffectManager(particles, bannerManager);
 const suit = new SuitRenderer();
 const recorder = new Recorder(els.canvas);
 
-
-const state = { running: false, mirror: true, skeleton: true, debug: false, W: 1280, H: 720, suitLoading: false };
+const state = { running: false, mirror: true, skeleton: true, showToast: true, debug: false, W: 1280, H: 720, suitLoading: false };
 
 const GESTURE_INFO = {
   open: { emoji: '✋', name: '손바닥', desc: '효과가 피어올라요' },
@@ -139,6 +139,7 @@ function setHint(text) {
 /** 중앙 상단 토스트 (Web Animations API로 매번 새로 재생) */
 let lastToastAt = 0;
 function showToast(emoji, name, desc, force = false) {
+  if (!state.showToast) return;
   const now = performance.now();
   if (!force && now - lastToastAt < 500) return;
   lastToastAt = now;
@@ -285,6 +286,17 @@ function bindControls() {
     suit.resetTracking();
   });
   els.skeleton.addEventListener('change', () => (state.skeleton = els.skeleton.checked));
+  if (els.toastToggle) {
+    els.toastToggle.addEventListener('change', () => {
+      state.showToast = els.toastToggle.checked;
+      if (!state.showToast) {
+        els.toast.hidden = true;
+        els.hud.hidden = true;
+      } else {
+        els.hud.hidden = false;
+      }
+    });
+  }
   els.debug.addEventListener('change', () => (state.debug = els.debug.checked));
 
   els.suitBtn.addEventListener('click', () => setSuit(!suit.target));
@@ -611,6 +623,11 @@ function drawDebug(frame) {
 }
 
 function updateHud(frame) {
+  if (!state.showToast) {
+    els.hud.hidden = true;
+    return;
+  }
+  els.hud.hidden = false;
   const g = frame.hands.map((h) => GESTURE_EMOJI[h.gesture] || '·').join(' ');
   const suitTag = suit.target ? ' · 🦾' : '';
   els.hud.textContent = `${effects.theme.emoji} ${effects.theme.label}${suitTag} · ${g || '손을 보여 주세요'}`;

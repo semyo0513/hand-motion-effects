@@ -244,10 +244,27 @@ export class EffectManager {
           this.flash = Math.max(this.flash, 0.25);
         }
         break;
-      case 'heart':
-        this._burst(ev.x, ev.y, 45, 100, 300, sc);
-        this.cores.push({ x: ev.x, y: ev.y, r: ev.size * 1.2, rgb: '255,100,150', alpha: 0.8 });
+      case 'heart': {
+        this._burst(ev.x, ev.y, Math.round(60 * this.intensity), 150, 450, sc);
+        this._addRing(ev.x, ev.y, ev.size * 0.3, 450, 0.6, 6);
+        this.flash = Math.max(this.flash, 0.3);
+
+        for (let i = 0; i < 35; i++) {
+          const a = rand(0, TAU);
+          const sp = rand(60, 260);
+          this.p.emit({
+            x: ev.x,
+            y: ev.y,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp - 50,
+            life: rand(0.6, 1.2),
+            size: rand(8, 18) * sc,
+            rgb: pick(['255,90,150', '255,180,220', '255,60,130', '255,220,240']),
+            drag: 0.94,
+          });
+        }
         break;
+      }
       case 'charge': {
         const n = Math.round(50 * this.intensity);
         for (let i = 0; i < n; i++) {
@@ -411,6 +428,45 @@ export class EffectManager {
             });
           }
         }
+        break;
+      }
+      case 'finger_3': {
+        const n = this._rate('f3' + h.slot, 45, dt);
+        for (let i = 0; i < n; i++) {
+          const a = rand(0, TAU);
+          const r = h.size * rand(0.9, 1.4);
+          this.p.emit({
+            x: c.x + Math.cos(a) * r,
+            y: c.y + Math.sin(a) * r,
+            vx: rand(-60, 60),
+            vy: rand(-60, 60),
+            life: rand(0.3, 0.6),
+            size: rand(5, 11) * sc,
+            rgb: pick(['255,200,80', '255,230,120', '255,255,255']),
+            drag: 0.94,
+          });
+        }
+        this._addRing(c.x, c.y, h.size * 0.6, 250, 0.4, 4);
+        this.cores.push({ x: c.x, y: c.y, r: h.size * 0.85, rgb: '255,190,80', alpha: 0.75 });
+        break;
+      }
+      case 'finger_4': {
+        const n = this._rate('f4' + h.slot, 40, dt);
+        for (let i = 0; i < n; i++) {
+          const a = rand(0, TAU);
+          const r = h.size * rand(1.1, 1.6);
+          this.p.emit({
+            x: c.x + Math.cos(a) * r,
+            y: c.y + Math.sin(a) * r,
+            vx: rand(-40, 40),
+            vy: rand(-40, 40),
+            life: rand(0.3, 0.6),
+            size: rand(4, 9) * sc,
+            rgb: pick(['120,230,255', '80,180,255', '255,255,255']),
+            drag: 0.95,
+          });
+        }
+        this.hexShields.push({ x: c.x, y: c.y, r: h.size * 1.45, alpha: 0.85 });
         break;
       }
       default:
