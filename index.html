@@ -243,6 +243,55 @@
       </div>
     </div>
 
+    <!-- 드로잉 모드 팔레트 툴바 -->
+    <aside id="drawingToolbar" class="drawing-toolbar" hidden>
+      <div class="dt-head">
+        <span class="dt-title">🎨 <b>손가락 드로잉 스튜디오</b></span>
+        <span class="dt-badge">검지로 자유롭게 그리기</span>
+      </div>
+
+      <div class="dt-body">
+        <div class="dt-section">
+          <span class="dt-lbl">색상 선택</span>
+          <div id="drawPalette" class="draw-palette">
+            <button type="button" class="swatch active" data-color="#00f0ff" style="background:#00f0ff" title="네온 시안"></button>
+            <button type="button" class="swatch" data-color="#ff5500" style="background:#ff5500" title="플레임 오렌지"></button>
+            <button type="button" class="swatch" data-color="#b026ff" style="background:#b026ff" title="바이올렛"></button>
+            <button type="button" class="swatch" data-color="#00ff66" style="background:#00ff66" title="네온 그린"></button>
+            <button type="button" class="swatch" data-color="#ffd700" style="background:#ffd700" title="골드"></button>
+            <button type="button" class="swatch" data-color="#ff007f" style="background:#ff007f" title="핫 핑크"></button>
+            <button type="button" class="swatch" data-color="#ffffff" style="background:#ffffff" title="화이트"></button>
+            <button type="button" class="swatch" data-color="#222222" style="background:#222222" title="다크"></button>
+            <label class="color-picker-btn" title="커스텀 색상">
+              <input type="color" id="drawColorPicker" value="#00f0ff">
+              <span>🎨</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="dt-section">
+          <span class="dt-lbl">드로잉 펜</span>
+          <div class="draw-tools">
+            <button type="button" class="tool-chip active" data-tool="glow">🖌️ <span>네온 글루</span></button>
+            <button type="button" class="tool-chip" data-tool="marker">✏️ <span>마커</span></button>
+            <button type="button" class="tool-chip" data-tool="spark">⚡ <span>스파크</span></button>
+            <button type="button" class="tool-chip" data-tool="eraser">🧹 <span>지우개</span></button>
+          </div>
+        </div>
+
+        <div class="dt-section range-section">
+          <span class="dt-lbl">펜 두께</span>
+          <input id="drawSizeSlider" class="draw-size-range" type="range" min="2" max="60" value="8">
+        </div>
+      </div>
+
+      <div class="dt-actions">
+        <button id="clearDrawBtn" class="dt-btn danger" type="button">🗑️ <span>지우기</span></button>
+        <button id="downloadDrawBtn" class="dt-btn primary" type="button">💾 <span>다운로드</span></button>
+        <button id="exitDrawBtn" class="dt-btn ghost" type="button">🚪 <span>종료</span></button>
+      </div>
+    </aside>
+
     <!-- 하단 컨트롤 -->
     <nav id="dock" class="dock" hidden aria-label="컨트롤">
       <div id="themes" class="themes" role="radiogroup" aria-label="테마"></div>
@@ -250,6 +299,7 @@
       <div class="sep" aria-hidden="true"></div>
 
       <button id="suitBtn" class="act suit" type="button" aria-pressed="false">🦾 <span>파워 슈트</span></button>
+      <button id="drawBtn" class="act" type="button" aria-pressed="false">🎨 <span>드로잉</span></button>
       <button id="faceBtn" class="act" type="button" aria-pressed="false" hidden>😎 <span>페이스플레이트</span></button>
       <button id="dockSettingsBtn" class="act" type="button">⚙️ <span>설정</span></button>
 

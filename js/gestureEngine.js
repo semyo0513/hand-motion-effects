@@ -224,6 +224,14 @@ export class GestureEngine {
       const sB = this.slots[b.slot].stable;
       const cntA = this.slots[a.slot].fingerCount || 5;
       const cntB = this.slots[b.slot].fingerCount || 5;
+
+      // 두 검지 손가락 들기 (☝️☝️) -> 드로잉 모드 토글
+      const bothPoint = (sA === 'point' || sA === 'peace') && (sB === 'point' || sB === 'peace');
+      if (bothPoint && now - (this.lastDrawToggleAt || 0) > 1500) {
+        this.lastDrawToggleAt = now;
+        events.push({ type: 'toggle_drawing' });
+      }
+
       const facingHands = (cntA >= 3 || sA === 'open' || sA === 'finger_4') && (cntB >= 3 || sB === 'open' || sB === 'finger_4');
       two = { a: a.center, b: b.center, mid, dist: d, bothOpen, bothFist, facingHands, avgSize: avg };
     } else {

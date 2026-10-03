@@ -16,6 +16,7 @@ import { SuitRenderer } from './suit.js';
 import { THEMES } from './themes.js';
 import { Recorder } from './recorder.js';
 import { BannerManager } from './bannerSystem.js';
+import { DrawingEngine } from './drawingEngine.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,6 +73,16 @@ const els = {
   bodyMotionCheck: $('bodyMotionCheck'),
   xShieldCheck: $('xShieldCheck'),
   skyStrikeCheck: $('skyStrikeCheck'),
+
+  // 드로잉 툴바
+  drawingToolbar: $('drawingToolbar'),
+  drawPalette: $('drawPalette'),
+  drawColorPicker: $('drawColorPicker'),
+  drawSizeSlider: $('drawSizeSlider'),
+  clearDrawBtn: $('clearDrawBtn'),
+  downloadDrawBtn: $('downloadDrawBtn'),
+  exitDrawBtn: $('exitDrawBtn'),
+  drawBtn: $('drawBtn'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -82,8 +93,9 @@ const bannerManager = new BannerManager();
 const effects = new EffectManager(particles, bannerManager);
 const suit = new SuitRenderer();
 const recorder = new Recorder(els.canvas);
+const drawingEngine = new DrawingEngine();
 
-const state = { running: false, mirror: true, skeleton: true, showToast: true, debug: false, W: 1280, H: 720, suitLoading: false };
+const state = { running: false, mirror: true, skeleton: true, showToast: true, debug: false, W: 1280, H: 720, suitLoading: false, drawingMode: false };
 
 const GESTURE_INFO = {
   open: { emoji: '✋', name: '손바닥', desc: '화염 & 리펄서 폭발' },
@@ -254,6 +266,24 @@ function handleSuitCall(frame, now) {
   }
 }
 
+/* ===================== 드로잉 모드 ===================== */
+
+function setDrawingMode(on) {
+  const next = on === undefined ? !state.drawingMode : !!on;
+  state.drawingMode = next;
+  drawingEngine.setEnabled(next);
+  if (els.drawBtn) {
+    els.drawBtn.setAttribute('aria-pressed', String(next));
+    els.drawBtn.classList.toggle('active', next);
+  }
+  if (els.drawingToolbar) els.drawingToolbar.hidden = !next;
+  if (next) {
+    showToast('🎨', '드로잉 스튜디오', '검지 손가락으로 화면에 그림을 그려보세요!', true);
+  } else {
+    showToast('🚪', '드로잉 종료', '작성한 그림은 화면에 보존됩니다', true);
+  }
+}
+
 /* ===================== 토스트(동작 인식 안내) ===================== */
 
 let prevBothOpen = false;
@@ -386,6 +416,41 @@ function bindControls() {
   if (els.bodyMotionCheck) els.bodyMotionCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.enabled = e.target.checked));
   if (els.xShieldCheck) els.xShieldCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.xShield = e.target.checked));
   if (els.skyStrikeCheck) els.skyStrikeCheck.addEventListener('change', (e) => (CONFIG.bodyMotion.skyStrike = e.target.checked));
+
+  if (els.drawBtn) els.drawBtn.addEventListener('click', () => setDrawingMode());
+  if (els.exitDrawBtn) els.exitDrawBtn.addEventListener('click', () => setDrawingMode(false));
+  if (els.clearDrawBtn) els.clearDrawBtn.addEventListener('click', () => drawingEngine.clear());
+  if (els.downloadDrawBtn) els.downloadDrawBtn.addEventListener('click', () => drawingEngine.download(els.video, state.mirror));
+
+  if (els.drawSizeSlider) {
+    els.drawSizeSlider.addEventListener('input', (e) => drawingEngine.setSize(e.target.value));
+  }
+
+  if (els.drawPalette) {
+    const swatches = els.drawPalette.querySelectorAll('.swatch');
+    swatches.forEach((sw) => {
+      sw.addEventListener('click', () => {
+        swatches.forEach((s) => s.classList.remove('active'));
+        sw.classList.add('active');
+        drawingEngine.setColor(sw.dataset.color);
+      });
+    });
+  }
+
+  if (els.drawColorPicker) {
+    els.drawColorPicker.addEventListener('input', (e) => {
+      drawingEngine.setColor(e.target.value);
+    });
+  }
+
+  const toolChips = document.querySelectorAll('.tool-chip');
+  toolChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      toolChips.forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      drawingEngine.setTool(chip.dataset.tool);
+    });
+  });
 
   els.captureBtn.addEventListener('click', async () => {
     try {
@@ -550,6 +615,23 @@ function tick(now) {
   handleSuitCall(frame, now);
   setHint(suit.target && suit.active && !suit.poseOk ? '상체(어깨)가 화면에 보이도록 조금 뒤로 물러서 주세요' : '');
 
+  drawingEngine.setBounds(state.W, state.H);
+
+  if (frame.events.some((e) => e.type === 'toggle_drawing')) {
+    setDrawingMode();
+  }
+
+  if (state.drawingMode) {
+    for (const h of frame.hands) {
+      const tip = h.tips.index || h.center;
+      drawingEngine.drawPoint(h.slot, tip.x, tip.y, particles);
+    }
+  } else {
+    for (const h of frame.hands) {
+      drawingEngine.liftPoint(h.slot);
+    }
+  }
+
   effects.update(frame, dt, now, poseMotion);
   particles.update(dt);
   toastFromFrame(frame);
@@ -587,6 +669,7 @@ function render(frame, now) {
 
   suit.draw(ctx, W, H, now); // 슈트 아머
   particles.draw(ctx);
+  drawingEngine.render(ctx); // 드로잉 레이어 합성 (선명하게 유지)
   effects.draw(ctx, W, H, now);
   if (state.skeleton || state.debug) drawHands(frame);
   suit.drawHud(ctx, W, H, now, frame.hands);
