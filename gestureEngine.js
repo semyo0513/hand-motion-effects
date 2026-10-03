@@ -77,15 +77,18 @@ export class GestureEngine {
     const pinchClose = dist(pts[4], pts[8]) < size * (CONFIG.gesture.pinchRatio || 0.28);
     if (pinchClose && (m || r || p)) return { gesture: 'pinch', count };
 
-    if (count === 0) {
-      const thumbUp = pts[4].y < pts[5].y - size * 0.35 && dist(pts[4], w) > size * 1.1;
-      return { gesture: thumbUp ? 'thumbsUp' : 'fist', count: 0 };
+    // 엄지 척 (Thumbs-Up) 감지: 다른 손가락들은 접혀 있고 엄지만 위를 향함
+    const thumbIsUp = (thumb || pts[4].y < pts[2].y - size * 0.2) && (!i && !m && !r && !p) && (pts[4].y < w.y);
+    if (thumbIsUp) {
+      return { gesture: 'thumbsUp', count: 1 };
     }
+
+    if (count === 0) return { gesture: 'fist', count: 0 };
     if (count === 5) return { gesture: 'open', count: 5 };
     if (count === 1 && i) return { gesture: 'point', count: 1 };
     if (count === 2 && i && m) return { gesture: 'peace', count: 2 };
     if (count === 3) return { gesture: 'finger_3', count: 3 };
-    if (count === 4) return { gesture: 'finger_4', count: 4 };
+    if (count === 4 || (!thumb && i && m && r && p)) return { gesture: 'finger_4', count: 4 };
 
     return { gesture: count === 5 ? 'open' : (count === 0 ? 'fist' : `finger_${count}`), count };
   }
@@ -217,7 +220,12 @@ export class GestureEngine {
         this.palmHist.length = 0;
         events.push({ type: 'clap', x: mid.x, y: mid.y, size: avg });
       }
-      two = { a: a.center, b: b.center, mid, dist: d, bothOpen, bothFist, avgSize: avg };
+      const sA = this.slots[a.slot].stable;
+      const sB = this.slots[b.slot].stable;
+      const cntA = this.slots[a.slot].fingerCount || 5;
+      const cntB = this.slots[b.slot].fingerCount || 5;
+      const facingHands = (cntA >= 3 || sA === 'open' || sA === 'finger_4') && (cntB >= 3 || sB === 'open' || sB === 'finger_4');
+      two = { a: a.center, b: b.center, mid, dist: d, bothOpen, bothFist, facingHands, avgSize: avg };
     } else {
       // 한 손 하트 (미니 하트: 엄지-검지 교차)
       for (const a of assigned) {

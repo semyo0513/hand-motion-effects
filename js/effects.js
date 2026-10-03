@@ -127,7 +127,7 @@ export class EffectManager {
 
     for (const ev of frame.events) this._handleEvent(ev, now);
     for (const h of frame.hands) this._handleHand(h, dt, now);
-    this._handleTwo(frame.two, dt);
+    this._handleTwo(frame.two, dt, now);
     this._handlePoseMotion(poseMotion, dt, now);
 
     if (this.banner) {
@@ -451,22 +451,53 @@ export class EffectManager {
         break;
       }
       case 'finger_4': {
-        const n = this._rate('f4' + h.slot, 40, dt);
+        const n = this._rate('f4' + h.slot, 55, dt);
         for (let i = 0; i < n; i++) {
           const a = rand(0, TAU);
-          const r = h.size * rand(1.1, 1.6);
+          const r = h.size * rand(0.9, 1.6);
           this.p.emit({
             x: c.x + Math.cos(a) * r,
             y: c.y + Math.sin(a) * r,
-            vx: rand(-40, 40),
-            vy: rand(-40, 40),
-            life: rand(0.3, 0.6),
-            size: rand(4, 9) * sc,
-            rgb: pick(['120,230,255', '80,180,255', '255,255,255']),
-            drag: 0.95,
+            vx: rand(-80, 80),
+            vy: rand(-80, 80),
+            life: rand(0.35, 0.7),
+            size: rand(5, 12) * sc,
+            rgb: pick(['100,240,255', '180,120,255', '80,180,255', '255,255,255']),
+            drag: 0.93,
           });
         }
-        this.hexShields.push({ x: c.x, y: c.y, r: h.size * 1.45, alpha: 0.85 });
+        // 4개 손가락 끝(검지, 중지, 약지, 새끼) 독립 빛 발광
+        const tips4 = [h.tips.index, h.tips.middle, h.tips.ring, h.tips.pinky];
+        for (const tip of tips4) {
+          if (tip) {
+            this.cores.push({ x: tip.x, y: tip.y, r: h.size * 0.35, rgb: '100,240,255', alpha: 0.85 });
+          }
+        }
+        this.hexShields.push({ x: c.x, y: c.y, r: h.size * 1.5, alpha: 0.85 });
+        this.cores.push({ x: c.x, y: c.y, r: h.size * 0.7, rgb: '140,180,255', alpha: 0.6 });
+        break;
+      }
+      case 'thumbsUp': {
+        const thumbTip = h.tips.thumb || c;
+        const n = this._rate('tup' + h.slot, 50, dt);
+        for (let i = 0; i < n; i++) {
+          const a = rand(-Math.PI * 0.8, -Math.PI * 0.2);
+          const sp = rand(130, 300) * sc;
+          this.p.emit({
+            x: thumbTip.x + rand(-10, 10),
+            y: thumbTip.y + rand(-5, 5),
+            vx: Math.cos(a) * sp * 0.5,
+            vy: Math.sin(a) * sp,
+            life: rand(0.4, 0.85),
+            size: rand(6, 14) * sc,
+            rgb: pick(['255,215,0', '255,180,50', '255,240,150', '255,255,255']),
+            gravity: -90,
+            drag: 0.94,
+          });
+        }
+        this.cores.push({ x: thumbTip.x, y: thumbTip.y, r: h.size * 0.65, rgb: '255,200,50', alpha: 0.9 });
+        this.cores.push({ x: thumbTip.x, y: thumbTip.y, r: h.size * 0.28, rgb: '255,255,255', alpha: 0.95 });
+        this._addRing(thumbTip.x, thumbTip.y, h.size * 0.4, 320, 0.4, 4);
         break;
       }
       default:
@@ -474,11 +505,11 @@ export class EffectManager {
     }
   }
 
-  _handleTwo(two, dt) {
+  _handleTwo(two, dt, now) {
     const t = this.theme;
 
     // 비행 모드: 슈트 착용 + 두 손 펴기 + 손이 화면 아래쪽 → 손바닥에서 추진 화염
-    if (this.suitMode && two && two.bothOpen && two.mid.y > this.H * 0.58) {
+    if (this.suitMode && two && (two.bothOpen || two.facingHands) && two.mid.y > this.H * 0.58) {
       const sc = clamp(two.avgSize / 110, 0.6, 2.2);
       [two.a, two.b].forEach((hand, idx) => {
         const n = this._rate('thr' + idx, 140, dt);
@@ -500,20 +531,23 @@ export class EffectManager {
       this.orbR *= Math.max(0, 1 - dt * 8);
       return;
     }
-    if (two && two.bothOpen) {
-      const target = clamp(two.dist * 0.28, 24, 240);
+
+    const isOrbActive = two && (two.bothOpen || two.facingHands || (two.avgSize && two.dist < two.avgSize * 4.5));
+    if (isOrbActive) {
+      this.lastOrbAt = now;
+      const target = clamp(two.dist * 0.35, 30, 260);
       this.orbR += (target - this.orbR) * Math.min(1, dt * 10);
       this.orbPos = two.mid;
 
       this.cores.push({ x: two.mid.x, y: two.mid.y, r: this.orbR, rgb: t.core, alpha: 0.9 });
-      this.cores.push({ x: two.mid.x, y: two.mid.y, r: this.orbR * 0.45, rgb: '255,255,255', alpha: 0.9 });
+      this.cores.push({ x: two.mid.x, y: two.mid.y, r: this.orbR * 0.45, rgb: '255,255,255', alpha: 0.95 });
 
-      // 구체 주위를 도는 입자 (구심력 pull=k, 접선속도 = r·√k 이면 원운동)
+      // 구체 주위를 도는 입자
       const k = 9;
-      const nOrbit = this._rate('orbit', 90, dt);
+      const nOrbit = this._rate('orbit', 110, dt);
       for (let i = 0; i < nOrbit; i++) {
         const a = rand(0, TAU);
-        const r = this.orbR * 0.9;
+        const r = this.orbR * 0.95;
         const v = r * Math.sqrt(k);
         this.p.emit({
           x: two.mid.x + Math.cos(a) * r,
@@ -523,23 +557,26 @@ export class EffectManager {
           tx: two.mid.x,
           ty: two.mid.y,
           pull: k,
-          life: 0.5,
-          size: rand(3, 8),
+          life: 0.55,
+          size: rand(4, 9),
           rgb: pick(t.palette),
           jitter: 40,
         });
       }
 
-      // 두 손 사이 전류
-      const nLink = this._rate('link', 10, dt);
+      // 두 손 사이 전류 번개
+      const nLink = this._rate('link', 12, dt);
       for (let i = 0; i < nLink; i++) {
         this.bolts.push({ pts: makeBolt(two.a.x, two.a.y, two.b.x, two.b.y, 50), life: 0.12, maxLife: 0.12, w: 2 });
       }
+    } else if (now && (now - (this.lastOrbAt || 0) < 800) && this.orbR > 5) {
+      // 0.8초 유예 시간을 두어 손바닥을 마주보거나 방향을 틀어도 구체가 갑자기 사라지지 않고 부드럽게 지속됨
+      this.orbR *= Math.max(0, 1 - dt * 2.0);
+      if (this.orbPos) {
+        this.cores.push({ x: this.orbPos.x, y: this.orbPos.y, r: this.orbR, rgb: t.core, alpha: 0.7 });
+      }
     } else {
       this.orbR *= Math.max(0, 1 - dt * 8);
-      if (this.orbR > 2 && this.orbPos) {
-        this.cores.push({ x: this.orbPos.x, y: this.orbPos.y, r: this.orbR, rgb: t.core, alpha: 0.6 });
-      }
     }
   }
 

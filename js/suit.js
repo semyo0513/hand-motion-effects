@@ -12,6 +12,7 @@
 import { CONFIG } from './config.js';
 import { getSprite } from './particles.js';
 
+const CYAN = '120,230,255';
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;

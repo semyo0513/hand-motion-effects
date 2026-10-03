@@ -86,15 +86,17 @@ const recorder = new Recorder(els.canvas);
 const state = { running: false, mirror: true, skeleton: true, showToast: true, debug: false, W: 1280, H: 720, suitLoading: false };
 
 const GESTURE_INFO = {
-  open: { emoji: '✋', name: '손바닥', desc: '효과가 피어올라요' },
+  open: { emoji: '✋', name: '손바닥', desc: '화염 & 리펄서 폭발' },
   fist: { emoji: '✊', name: '주먹', desc: '에너지를 모으는 중' },
   pinch: { emoji: '🤏', name: '핀치', desc: '스파크가 튀어요' },
   point: { emoji: '☝️', name: '검지', desc: '빛의 궤적을 그려요' },
   peace: { emoji: '✌️', name: 'V 사인', desc: '번개가 뻗어 나가요' },
-  thumbsUp: { emoji: '👍', name: '엄지 척', desc: '테마 전환' },
+  finger_3: { emoji: '🤟', name: '손가락 3개', desc: '삼중 에너지 링 & 커스텀 배너' },
+  finger_4: { emoji: '🖐️', name: '손가락 4개', desc: '쿼드 에너지 파동 & 다이아몬드 배리어' },
+  thumbsUp: { emoji: '👍', name: '엄지 척', desc: '골든 빅토리 아우라 & 라이징 스타' },
 };
-const GESTURE_LABEL = { open: '손바닥', fist: '주먹', pinch: '핀치', point: '검지', peace: 'V', thumbsUp: '엄지 척', none: '-' };
-const GESTURE_EMOJI = { open: '✋', fist: '✊', pinch: '🤏', point: '☝️', peace: '✌️', thumbsUp: '👍', none: '·' };
+const GESTURE_LABEL = { open: '손바닥', fist: '주먹', pinch: '핀치', point: '검지', peace: 'V', finger_3: '손가락 3개', finger_4: '손가락 4개', thumbsUp: '엄지 척', none: '-' };
+const GESTURE_EMOJI = { open: '✋', fist: '✊', pinch: '🤏', point: '☝️', peace: '✌️', finger_3: '🤟', finger_4: '🖐️', thumbsUp: '👍', none: '·' };
 const HAND_LINES = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
@@ -139,7 +141,12 @@ function setHint(text) {
 /** 중앙 상단 토스트 (Web Animations API로 매번 새로 재생) */
 let lastToastAt = 0;
 function showToast(emoji, name, desc, force = false) {
-  if (!state.showToast) return;
+  if (!state.showToast) {
+    els.toast.hidden = true;
+    els.toast.style.display = 'none';
+    return;
+  }
+  els.toast.style.display = '';
   const now = performance.now();
   if (!force && now - lastToastAt < 500) return;
   lastToastAt = now;
@@ -251,6 +258,7 @@ function handleSuitCall(frame, now) {
 
 let prevBothOpen = false;
 function toastFromFrame(frame) {
+  if (!state.showToast) return;
   const ev = frame.events;
   const has = (t) => ev.find((e) => e.type === t);
   let pick = null;
@@ -296,8 +304,14 @@ function bindControls() {
       state.showToast = els.toastToggle.checked;
       if (!state.showToast) {
         els.toast.hidden = true;
+        els.toast.style.display = 'none';
+        if (els.toast.getAnimations) {
+          els.toast.getAnimations().forEach((a) => a.cancel());
+        }
         els.hud.hidden = true;
+        els.hint.hidden = true;
       } else {
+        els.toast.style.display = '';
         els.hud.hidden = false;
       }
     });
