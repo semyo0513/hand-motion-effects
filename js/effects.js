@@ -688,7 +688,7 @@ export class EffectManager {
     // 화면 섬광
     if (this.flash > 0.01) {
       ctx.save();
-      ctx.globalAlpha = Math.min(1, this.flash);
+      ctx.globalAlpha = Math.min(0.2, this.flash * 0.25);
       ctx.fillStyle = `rgb(${t.core})`;
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillRect(-40, -40, W + 80, H + 80);

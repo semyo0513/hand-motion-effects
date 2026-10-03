@@ -129,6 +129,7 @@ export class SuitRenderer {
       this.sm = null;
       this.g = null;
       this.vis = 0;
+      this.flash = 0;
       this.landed = {};
       return;
     }
@@ -664,7 +665,7 @@ export class SuitRenderer {
     if (this.flash > 0.01) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = Math.min(1, this.flash);
+      ctx.globalAlpha = Math.min(0.2, this.flash * 0.25);
       ctx.fillStyle = `rgb(${CYAN})`;
       ctx.fillRect(-40, -40, W + 80, H + 80);
       ctx.restore();

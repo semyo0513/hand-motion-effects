@@ -215,6 +215,11 @@ async function setSuit(on) {
   }
   suit.setOn(on);
   effects.setSuitMode(on);
+  if (!on) {
+    suit.flash = 0;
+    effects.flash = 0;
+    effects.cores.length = 0;
+  }
   syncSuitButtons();
   if (on) showToast('🦾', '파워 슈트 호출', '상체가 보이게 서 주세요', true);
   else showToast('🛡️', '슈트 해제', '장갑이 분리돼요', true);
@@ -520,7 +525,8 @@ function tick(now) {
   const result = tracker.detect(els.video, now);
   const frame = gestures.update(result, state.W, state.H, state.mirror, now);
 
-  const pose = suit.active || suit.target || (CONFIG.bodyMotion && CONFIG.bodyMotion.enabled) ? tracker.detectPose(els.video, now) : null;
+  const shouldPose = (suit.active || suit.target || (CONFIG.bodyMotion && CONFIG.bodyMotion.enabled)) && tracker.poseReady;
+  const pose = shouldPose ? tracker.detectPose(els.video, now) : null;
   const poseMotion = gestures.updatePose(pose, state.W, state.H, state.mirror, now);
 
   suit.update(pose, state.W, state.H, state.mirror, dt, now);
@@ -564,12 +570,6 @@ function render(frame, now) {
   }
   ctx.drawImage(els.video, 0, 0, W, H);
   ctx.restore();
-
-  // 슈트 착용 중에만 은은한 명암 지원 (슈트 해제 시 100% 선명)
-  if (suit.active || suit.target) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-    ctx.fillRect(0, 0, W, H);
-  }
 
   suit.draw(ctx, W, H, now); // 슈트 아머
   particles.draw(ctx);
