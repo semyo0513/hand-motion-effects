@@ -281,10 +281,104 @@ function setDrawingMode(on) {
     els.drawingToolbar.style.display = next ? 'flex' : 'none';
   }
   if (next) {
-    showToast('🎨', '드로잉 스튜디오', '손가락 또는 마우스/터치로 화면에 그림을 그려보세요!', true);
+    showToast('🎨', '드로잉 스튜디오', '검지 손가락(☝️)으로 글자를 쓰고, 주먹(✊)을 쥐면 펜이 들려요!', true);
   } else {
     showToast('🚪', '드로잉 종료', '작성한 그림은 보존됩니다', true);
   }
+}
+
+/* ===================== 모션 인식 팔레트 선택 ===================== */
+
+let paletteHoverStart = 0;
+let paletteHoverTarget = null;
+let hoverProgress = 0;
+let lastHoverPoint = null;
+
+function updateMotionPalette(frame, now) {
+  if (!els.drawingToolbar || els.drawingToolbar.hidden) {
+    paletteHoverTarget = null;
+    paletteHoverStart = 0;
+    hoverProgress = 0;
+    lastHoverPoint = null;
+    return;
+  }
+
+  const clickableItems = [
+    ...els.drawingToolbar.querySelectorAll('.swatch'),
+    ...els.drawingToolbar.querySelectorAll('.tool-chip'),
+    ...els.drawingToolbar.querySelectorAll('.dt-btn'),
+  ];
+
+  let currentTarget = null;
+  let currentPt = null;
+
+  const rect = els.canvas.getBoundingClientRect();
+  const scaleX = rect.width / state.W;
+  const scaleY = rect.height / state.H;
+
+  for (const h of frame.hands) {
+    const tip = h.tips.index || h.center;
+    const screenX = rect.left + tip.x * scaleX;
+    const screenY = rect.top + tip.y * scaleY;
+
+    for (const item of clickableItems) {
+      const b = item.getBoundingClientRect();
+      if (screenX >= b.left - 8 && screenX <= b.right + 8 && screenY >= b.top - 8 && screenY <= b.bottom + 8) {
+        currentTarget = item;
+        currentPt = { x: tip.x, y: tip.y, screenX, screenY };
+        break;
+      }
+    }
+    if (currentTarget) break;
+  }
+
+  if (currentTarget) {
+    lastHoverPoint = currentPt;
+    if (paletteHoverTarget === currentTarget) {
+      const elapsed = now - paletteHoverStart;
+      hoverProgress = Math.min(1, elapsed / 300); // 0.3초 동안 팔레트 상에 검지를 올리면 자동 선택
+      if (hoverProgress >= 1) {
+        currentTarget.click();
+        paletteHoverStart = now + 400; // 자동 클릭 후 쿨다운
+        hoverProgress = 0;
+      }
+    } else {
+      paletteHoverTarget = currentTarget;
+      paletteHoverStart = now;
+      hoverProgress = 0;
+    }
+  } else {
+    paletteHoverTarget = null;
+    paletteHoverStart = 0;
+    hoverProgress = 0;
+    lastHoverPoint = null;
+  }
+}
+
+function drawMotionPaletteCursor(ctx, now) {
+  if (!state.drawingMode || !paletteHoverTarget || !lastHoverPoint) return;
+  const { x, y } = lastHoverPoint;
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `rgb(${CONFIG.suit.reactorColor || '120,230,255'})`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+
+  ctx.beginPath();
+  ctx.arc(x, y, 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (hoverProgress > 0) {
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hoverProgress);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /* ===================== 토스트(동작 인식 안내) ===================== */
@@ -681,9 +775,16 @@ function tick(now) {
   }
 
   if (state.drawingMode) {
+    updateMotionPalette(frame, now);
     for (const h of frame.hands) {
-      const tip = h.tips.index || h.center;
-      drawingEngine.drawPoint(h.slot, tip.x, tip.y, particles);
+      // 오직 검지 손가락만 펼쳤을 때만(point / fingerCount 1) 펜으로 그려짐
+      const isPen = h.gesture === 'point' || (h.fingerCount === 1 && h.tips.index);
+      if (isPen) {
+        drawingEngine.drawPoint(h.slot, h.tips.index.x, h.tips.index.y, particles);
+      } else {
+        // 주먹을 쥐거나(fist) 검지를 접은 경우에는 펜 떼기 (드로잉 안 됨)
+        drawingEngine.liftPoint(h.slot);
+      }
     }
   } else {
     for (const h of frame.hands) {
@@ -730,6 +831,7 @@ function render(frame, now) {
   particles.draw(ctx);
   drawingEngine.render(ctx); // 드로잉 레이어 합성 (선명하게 유지)
   effects.draw(ctx, W, H, now);
+  drawMotionPaletteCursor(ctx, now); // 모션 팔레트 호버 커서 & 프로그레스 링
   if (state.skeleton || state.debug) drawHands(frame);
   suit.drawHud(ctx, W, H, now, frame.hands);
   suit.drawOverlay(ctx, W, H, now);
